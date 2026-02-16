@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabaseClient'
-import CRM from './CRM'
+import CRM from './CRM.jsx'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -196,6 +196,9 @@ export default function App() {
       </div>
     )
   }
+
+  // User is logged in - show the CRM
+  return <CRM session={session} onLogout={handleLogout} />
 
   // User is logged in - show the CRM
   return <CRM session={session} onLogout={handleLogout} />
