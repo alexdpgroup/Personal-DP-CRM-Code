@@ -203,3 +203,4 @@ export default function App() {
   // User is logged in - show the CRM
   return <CRM session={session} onLogout={handleLogout} />
 }
+ 
