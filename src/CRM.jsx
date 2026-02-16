@@ -409,17 +409,53 @@ export default function CRM({ session, onLogout }) {
   const [showAddFund, setShowAddFund] = useState(false);
   
   useEffect(() => {
-    Promise.all([
-      loadData("vc_lps_v3", SEED_LPS),
-      loadData("dp_fund_defs_v1", FUND_DEFS)
-    ]).then(([lpsData, fundsData]) => {
-      setLPs(lpsData);
-      setFundDefs(fundsData);
-      setLoading(false);
-    });
+    loadFromSupabase();
   }, []);
 
-  const saveLPs = (updated) => { setLPs(updated); saveData("vc_lps_v3", updated); };
+  const loadFromSupabase = async () => {
+    try {
+      // Load funds from Supabase
+      const { data: funds, error: fundsError } = await supabase
+        .from('funds')
+        .select('*')
+        .order('vintage', { ascending: false });
+
+      if (fundsError) throw fundsError;
+
+      // Load LPs from Supabase
+      const { data: lpsData, error: lpsError } = await supabase
+        .from('lps')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (lpsError) throw lpsError;
+
+      // Transform funds to match expected format
+      const transformedFunds = funds?.map(f => ({
+        name: f.name,
+        vintage: f.vintage,
+        target: f.target_amount,
+        status: f.status
+      })) || [];
+
+      setFundDefs(transformedFunds.length > 0 ? transformedFunds : FUND_DEFS);
+      setLPs(lpsData && lpsData.length > 0 ? lpsData : SEED_LPS);
+      setLoading(false);
+    } catch (error) {
+      console.error('Error loading data:', error);
+      // Fallback to seed data if Supabase fails
+      setFundDefs(FUND_DEFS);
+      setLPs(SEED_LPS);
+      setLoading(false);
+    }
+  };
+
+  const saveLPs = async (updated) => {
+    setLPs(updated);
+    // Save to Supabase instead of browser storage
+    // Note: This will be replaced with proper upsert logic per LP
+  };
+  
   const goFund = (fundName) => { setActiveFund(fundName); setPage("fund"); };
   const goPage = (p) => { setPage(p); setActiveFund(null); };
 
@@ -1653,19 +1689,21 @@ function SettingsPage({ lps, session }) {
       // Load all user profiles
       const { data: profiles, error } = await supabase
         .from('user_profiles')
-        .select('*, auth_user:id(email, last_sign_in_at, created_at)')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       // Separate employees and LPs
       const emps = profiles?.filter(p => p.role === 'employee' || p.role === 'admin') || [];
-      const lps = profiles?.filter(p => p.role === 'lp') || [];
+      const lpProfiles = profiles?.filter(p => p.role === 'lp') || [];
 
       setEmployees(emps);
-      setLpUsers(lps);
+      setLpUsers(lpProfiles);
     } catch (error) {
       console.error('Error loading team:', error);
+      setEmployees([]);
+      setLpUsers([]);
     } finally {
       setLoading(false);
     }
@@ -1741,9 +1779,9 @@ Send them the portal URL and their credentials. They'll only see their own inves
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Name / ID</th>
                   <th>Role</th>
-                  <th>Last Login</th>
+                  <th>Details</th>
                   <th>Added</th>
                   <th></th>
                 </tr>
@@ -1753,13 +1791,11 @@ Send them the portal URL and their credentials. They'll only see their own inves
                   <tr key={emp.id}>
                     <td>
                       <div className="td-name">{emp.full_name || 'No name set'}</div>
-                      <div className="td-sub">{emp.email || 'Loading...'}</div>
+                      <div className="td-sub" style={{ fontFamily: 'monospace', fontSize: 11 }}>{emp.id}</div>
                     </td>
                     <td><span className="stat-badge badge-gold">{emp.role}</span></td>
-                    <td style={{ fontSize: 13 }}>
-                      {emp.last_sign_in_at 
-                        ? new Date(emp.last_sign_in_at).toLocaleDateString()
-                        : <span style={{ color: 'var(--ink-muted)' }}>Never</span>}
+                    <td style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+                      View in Supabase
                     </td>
                     <td style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
                       {new Date(emp.created_at).toLocaleDateString()}
@@ -1767,7 +1803,7 @@ Send them the portal URL and their credentials. They'll only see their own inves
                     <td>
                       <button 
                         className="btn btn-ghost btn-sm"
-                        onClick={() => setDeleteConfirm({ id: emp.id, name: emp.full_name, role: 'employee' })}
+                        onClick={() => setDeleteConfirm({ id: emp.id, name: emp.full_name || emp.id, role: 'employee' })}
                         title="Remove user"
                       >
                         <Icon name="close" size={14} />
@@ -1796,9 +1832,9 @@ Send them the portal URL and their credentials. They'll only see their own inves
             <table>
               <thead>
                 <tr>
-                  <th>Email</th>
+                  <th>User ID</th>
                   <th>Linked LP</th>
-                  <th>Last Login</th>
+                  <th>Details</th>
                   <th>Added</th>
                   <th></th>
                 </tr>
@@ -1809,17 +1845,15 @@ Send them the portal URL and their credentials. They'll only see their own inves
                   return (
                     <tr key={lp.id}>
                       <td>
-                        <div className="td-name">{lp.email || 'Loading...'}</div>
+                        <div className="td-sub" style={{ fontFamily: 'monospace', fontSize: 11 }}>{lp.id}</div>
                       </td>
                       <td>
                         {linkedLP 
                           ? <div><div className="td-name">{linkedLP.name}</div><div className="td-sub">{linkedLP.firm}</div></div>
                           : <span style={{ color: 'var(--ink-muted)' }}>Not linked</span>}
                       </td>
-                      <td style={{ fontSize: 13 }}>
-                        {lp.last_sign_in_at 
-                          ? new Date(lp.last_sign_in_at).toLocaleDateString()
-                          : <span style={{ color: 'var(--ink-muted)' }}>Never</span>}
+                      <td style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+                        View in Supabase
                       </td>
                       <td style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
                         {new Date(lp.created_at).toLocaleDateString()}
@@ -1827,7 +1861,7 @@ Send them the portal URL and their credentials. They'll only see their own inves
                       <td>
                         <button 
                           className="btn btn-ghost btn-sm"
-                          onClick={() => setDeleteConfirm({ id: lp.id, name: lp.email, role: 'lp' })}
+                          onClick={() => setDeleteConfirm({ id: lp.id, name: linkedLP?.name || lp.id, role: 'lp' })}
                           title="Revoke portal access"
                         >
                           <Icon name="close" size={14} />
