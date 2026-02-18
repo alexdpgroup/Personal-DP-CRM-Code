@@ -516,8 +516,8 @@ export default function CRM({ session, onLogout }) {
           
           {/* Funds Section */}
           {(() => {
-            const funds = (fundDefs || []).filter(f => f.name.startsWith("Decisive Point Fund")).sort((a, b) => a.name.localeCompare(b.name));
-            const spvs = (fundDefs || []).filter(f => f.name.startsWith("Decisive Point -")).sort((a, b) => a.name.localeCompare(b.name));
+            const funds = (fundDefs || []).filter(f => f?.name?.startsWith("Decisive Point Fund")).sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
+            const spvs = (fundDefs || []).filter(f => f?.name?.startsWith("Decisive Point -")).sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
             
             return (
               <>
