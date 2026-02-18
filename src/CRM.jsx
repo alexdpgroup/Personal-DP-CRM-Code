@@ -2532,21 +2532,22 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
                 const contactFirm = inv.contact?.firm || '';
                 return (
                   <div key={inv.id}
-                  style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
-                  onClick={() => setSelectedLP(lp)}>
-                  <div className="avatar">{initials(lp.name)}</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500, fontSize: 13.5 }}>{lp.name}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{lp.firm}</div>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(lp.commitment, true)}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
-                      {lp.funded > 0 ? `${Math.round((lp.funded/lp.commitment)*100)}% funded` : "Not yet called"}
+                    style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
+                    onClick={() => setSelectedLP(inv)}>
+                    <div className="avatar">{initials(contactName)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(inv.commitment, true)}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                        {inv.funded > 0 ? `${Math.round((inv.funded/inv.commitment)*100)}% funded` : "Not yet called"}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             }
           </div>
         </div>
