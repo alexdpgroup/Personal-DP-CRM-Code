@@ -2343,13 +2343,24 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
   const loadFundData = async () => {
     try {
       // Get fund ID
-      const { data: fundData } = await supabase
+      const { data: fundData, error: fundError } = await supabase
         .from('funds')
         .select('id')
         .eq('name', fundName)
         .single();
 
+      if (fundError) {
+        console.error('Fund lookup error:', fundError);
+        setInvestments([]);
+        setContacts([]);
+        setLoading(false);
+        return;
+      }
+
       if (!fundData) {
+        console.warn('Fund not found:', fundName);
+        setInvestments([]);
+        setContacts([]);
         setLoading(false);
         return;
       }
@@ -2357,12 +2368,30 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
       // Load investment records for this fund
       const { data: investmentData, error: invError } = await supabase
         .from('lps')
-        .select('*, contact:parent_lp_id(*)')
+        .select('*')
         .eq('fund_id', fundData.id)
-        .eq('is_contact_record', false)
-        .order('created_at', { ascending: false });
+        .eq('is_contact_record', false);
 
-      if (invError) throw invError;
+      if (invError) {
+        console.error('Investment load error:', invError);
+        setInvestments([]);
+      } else {
+        // Manually load contact data for each investment
+        const investmentsWithContacts = await Promise.all(
+          (investmentData || []).map(async (inv) => {
+            if (!inv.parent_lp_id) return { ...inv, contact: null };
+            
+            const { data: contactData } = await supabase
+              .from('lps')
+              .select('*')
+              .eq('id', inv.parent_lp_id)
+              .single();
+            
+            return { ...inv, contact: contactData };
+          })
+        );
+        setInvestments(investmentsWithContacts);
+      }
 
       // Load all contacts for dropdown
       const { data: contactData, error: contactError } = await supabase
@@ -2371,12 +2400,16 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         .eq('is_contact_record', true)
         .order('name');
 
-      if (contactError) throw contactError;
-
-      setInvestments(investmentData || []);
-      setContacts(contactData || []);
+      if (contactError) {
+        console.error('Contact load error:', contactError);
+        setContacts([]);
+      } else {
+        setContacts(contactData || []);
+      }
     } catch (error) {
       console.error('Error loading fund data:', error);
+      setInvestments([]);
+      setContacts([]);
     } finally {
       setLoading(false);
     }
