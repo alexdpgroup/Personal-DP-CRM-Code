@@ -317,13 +317,7 @@ const FUND_DEFS = [
 
 const SEED_LPS = []; // Removed seed data - start fresh
 
-const PORTFOLIO = [
-  { company: "Aether AI", sector: "AI/ML", invested: 3200000, currentMark: 9600000, moic: 3.0, stage: "Series B", fund: "Decisive Point Fund II" },
-  { company: "Verda Bio", sector: "Biotech", invested: 2100000, currentMark: 4200000, moic: 2.0, stage: "Series A", fund: "Decisive Point Fund II" },
-  { company: "CarbonVault", sector: "Climate Tech", invested: 1800000, currentMark: 3600000, moic: 2.0, stage: "Series A", fund: "Decisive Point Fund III (Current)" },
-  { company: "Nexus Robotics", sector: "Robotics", invested: 2500000, currentMark: 2500000, moic: 1.0, stage: "Seed", fund: "Decisive Point Fund III (Current)" },
-  { company: "Luminary Health", sector: "Digital Health", invested: 1500000, currentMark: 4500000, moic: 3.0, stage: "Series B", fund: "Decisive Point Fund II" },
-];
+const PORTFOLIO = []; // Removed seed data - will load from funds
 
 function fmtMoney(n, short = false) {
   if (!n) return "$0";
@@ -1322,42 +1316,7 @@ function PipelinePage({ lps, saveLPs }) {
 
 // Seed schedule of investments data — each company has multiple financing rounds
 const SEED_SCHEDULE = [
-  {
-    company: "Aether AI", sector: "AI/ML", fund: "Decisive Point Fund II",
-    financings: [
-      { id: "ae1", asset: "SAFE", date: "2021-04-15", shares: 0, invested: 500000, value: 1500000, costPerShare: 0, fmvPerShare: 0 },
-      { id: "ae2", asset: "Series A", date: "2022-01-10", shares: 250000, invested: 1200000, value: 3600000, costPerShare: 4.80, fmvPerShare: 14.40 },
-      { id: "ae3", asset: "Series B", date: "2023-06-20", shares: 125000, invested: 1500000, value: 4500000, costPerShare: 12.00, fmvPerShare: 36.00 },
-    ]
-  },
-  {
-    company: "Verda Bio", sector: "Biotech", fund: "Decisive Point Fund II",
-    financings: [
-      { id: "vb1", asset: "Series A", date: "2021-09-05", shares: 400000, invested: 1000000, value: 2000000, costPerShare: 2.50, fmvPerShare: 5.00 },
-      { id: "vb2", asset: "Series A-1", date: "2022-11-18", shares: 150000, invested: 1100000, value: 2200000, costPerShare: 7.33, fmvPerShare: 14.67 },
-    ]
-  },
-  {
-    company: "CarbonVault", sector: "Climate Tech", fund: "Decisive Point Fund III (Current)",
-    financings: [
-      { id: "cv1", asset: "SAFE", date: "2024-02-01", shares: 0, invested: 800000, value: 1600000, costPerShare: 0, fmvPerShare: 0 },
-      { id: "cv2", asset: "Series A", date: "2024-08-15", shares: 200000, invested: 1000000, value: 2000000, costPerShare: 5.00, fmvPerShare: 10.00 },
-    ]
-  },
-  {
-    company: "Nexus Robotics", sector: "Robotics", fund: "Decisive Point Fund III (Current)",
-    financings: [
-      { id: "nr1", asset: "Seed", date: "2024-04-10", shares: 500000, invested: 2500000, value: 2500000, costPerShare: 5.00, fmvPerShare: 5.00 },
-    ]
-  },
-  {
-    company: "Luminary Health", sector: "Digital Health", fund: "Decisive Point Fund II",
-    financings: [
-      { id: "lh1", asset: "Series A", date: "2022-03-22", shares: 300000, invested: 750000, value: 2250000, costPerShare: 2.50, fmvPerShare: 7.50 },
-      { id: "lh2", asset: "Series B", date: "2023-10-05", shares: 100000, invested: 750000, value: 2250000, costPerShare: 7.50, fmvPerShare: 22.50 },
-    ]
-  },
-];
+const SEED_SCHEDULE = []; // Removed seed data
 
 function PortfolioPage() {
   const [schedule, setSchedule] = useState(null);
