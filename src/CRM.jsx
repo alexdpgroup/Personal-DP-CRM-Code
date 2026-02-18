@@ -307,7 +307,7 @@ const STAGES = [
 ];
 
 const TIERS = ["Strategic", "Institutional", "Family Office", "HNW", "UHNW"];
-const PARTNERS = ["Thomas Hendrix", "Andrew Price", "Eric Horan", "Debi O'Connell", "Matthew Williams"];
+const PARTNERS = ["Sarah Chen", "Marcus Webb", "Priya Nair", "James Liu"];
 const FUNDS = ["Decisive Point Fund I", "Decisive Point Fund II", "Decisive Point Fund III (Current)"];
 const FUND_DEFS = [
   { name: "Decisive Point Fund I",             target: 10000000,  status: "closed",  vintage: 2018 },
@@ -751,100 +751,26 @@ function MiniStat({ label, value }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
+// Simple LP Directory - just displays lps, no complex loading
 function LPDirectory({ lps, saveLPs, onPortal }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
+  const [filterFund, setFilterFund] = useState("all");
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [contacts, setContacts] = useState([]);
-  const [investments, setInvestments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [expandedLP, setExpandedLP] = useState(null);
 
-  useEffect(() => {
-    loadLPData();
-  }, []);
+  // Get unique funds from lps
+  const funds = [...new Set((lps || []).map(lp => lp.fund))].filter(Boolean);
 
-  const loadLPData = async () => {
-    try {
-      // Load contact records
-      const { data: contactData, error: contactError } = await supabase
-        .from('lps')
-        .select('*')
-        .eq('is_contact_record', true)
-        .order('name');
-
-      if (contactError) throw contactError;
-
-      // Load all investment records
-      const { data: investmentData, error: investError } = await supabase
-        .from('lps')
-        .select('*, fund:funds(*)')
-        .eq('is_contact_record', false)
-        .not('parent_lp_id', 'is', null);
-
-      if (investError) throw investError;
-
-      setContacts(contactData || []);
-      setInvestments(investmentData || []);
-    } catch (error) {
-      console.error('Error loading LP data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addContact = async (contactData) => {
-    try {
-      // Get any fund ID (required by schema even for contacts)
-      const { data: fundData, error: fundError } = await supabase
-        .from('funds')
-        .select('id')
-        .limit(1)
-        .single();
-
-      if (fundError || !fundData) {
-        throw new Error('No funds found. Please create a fund first.');
-      }
-
-      const { data, error } = await supabase
-        .from('lps')
-        .insert([{
-          name: contactData.name,
-          firm: contactData.firm,
-          email: contactData.email,
-          phone: contactData.phone || '',
-          partner: contactData.partner,
-          is_contact_record: true,
-          stage: 'contact',
-          commitment: 0,
-          funded: 0,
-          nav: 0,
-          fund_id: fundData.id // Dummy fund (required by schema)
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      await loadLPData(); // Refresh
-      setShowAdd(false);
-    } catch (error) {
-      console.error('Error adding contact:', error);
-      alert('Error adding LP contact: ' + error.message);
-    }
-  };
-
-  // Filter contacts
-  const filteredContacts = contacts.filter(contact => {
+  // Filter LPs
+  const filteredLPs = (lps || []).filter(lp => {
     const q = search.toLowerCase();
-    const matchQ = !q || contact.name.toLowerCase().includes(q) || contact.firm.toLowerCase().includes(q);
-    const matchPartner = filterPartner === "all" || contact.partner === filterPartner;
-    return matchQ && matchPartner;
+    const matchQ = !q || lp.name?.toLowerCase().includes(q) || lp.firm?.toLowerCase().includes(q);
+    const matchPartner = filterPartner === "all" || lp.partner === filterPartner;
+    const matchFund = filterFund === "all" || lp.fund === filterFund;
+    return matchQ && matchPartner && matchFund;
   });
-
-  if (loading) {
-    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading LP directory...</div>;
-  }
 
   return (
     <div>
@@ -853,60 +779,63 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
           <Icon name="search" size={14} />
           <input className="search-input" placeholder="Search LP name or firm…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <select className="filter-select" value={filterFund} onChange={e => setFilterFund(e.target.value)}>
+          <option value="all">All Funds</option>
+          {funds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
+        </select>
         <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
           <option value="all">All Partners</option>
           {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-          <Icon name="plus" size={14} /> Add LP Contact
+          <Icon name="plus" size={14} /> Add LP
         </button>
       </div>
 
       <div className="card">
         <div className="card-body">
-          {filteredContacts.length === 0 ? (
+          {filteredLPs.length === 0 ? (
             <div className="empty">
               <Icon name="users" size={40} />
-              <h3>No LP contacts found</h3>
-              <p>Add your first LP contact to get started</p>
+              <h3>No LPs found</h3>
+              <p>Add your first LP to get started</p>
             </div>
           ) : (
             <table>
               <thead>
                 <tr>
-                  <th>Contact</th>
-                  <th>Firm</th>
-                  <th>Email</th>
+                  <th>Investor</th>
+                  <th>Fund</th>
+                  <th>Stage</th>
                   <th>Partner</th>
-                  <th>Funds</th>
-                  <th>Total Commitment</th>
+                  <th>Commitment</th>
+                  <th>Funded</th>
+                  <th>NAV</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredContacts.map(contact => {
-                  // Get all investments for this contact
-                  const contactInvestments = investments.filter(inv => inv.parent_lp_id === contact.id);
-                  const totalCommit = contactInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
-                  const fundNames = [...new Set(contactInvestments.map(inv => inv.fund?.name || 'Unknown'))];
-                  
+                {filteredLPs.map(lp => {
+                  const s = stageInfo(lp.stage);
                   return (
-                    <tr key={contact.id} onClick={() => setSelected(contact)} style={{ cursor: 'pointer' }}>
+                    <tr key={lp.id} onClick={() => setSelected(lp)} style={{ cursor: 'pointer' }}>
                       <td>
-                        <div className="td-name">{contact.name}</div>
+                        <div className="td-name">{lp.name}</div>
+                        <div className="td-sub">{lp.firm}</div>
                       </td>
-                      <td><div className="td-sub">{contact.firm}</div></td>
-                      <td style={{ fontSize: 13 }}>{contact.email}</td>
-                      <td><span className="stat-badge badge-blue">{contact.partner}</span></td>
                       <td>
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {fundNames.length > 0 ? fundNames.map(fn => (
-                            <span key={fn} className="stat-badge badge-gold" style={{ fontSize: 11 }}>
-                              {fn.replace('Decisive Point ', '')}
-                            </span>
-                          )) : <span style={{ color: 'var(--ink-muted)', fontSize: 12 }}>No investments</span>}
-                        </div>
+                        <span className="stat-badge badge-gold">
+                          {lp.fund?.replace('Decisive Point ', '') || '—'}
+                        </span>
                       </td>
-                      <td style={{ fontWeight: 600 }}>{totalCommit > 0 ? fmtMoney(totalCommit) : '—'}</td>
+                      <td>
+                        <span className="stat-badge" style={{ background: s.bg, color: s.color }}>
+                          {s.label}
+                        </span>
+                      </td>
+                      <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
+                      <td style={{ fontWeight: 500 }}>{lp.commitment ? fmtMoney(lp.commitment) : "—"}</td>
+                      <td style={{ color: 'var(--gold)' }}>{lp.funded ? fmtMoney(lp.funded) : "—"}</td>
+                      <td style={{ color: 'var(--green)' }}>{lp.nav ? fmtMoney(lp.nav) : "—"}</td>
                     </tr>
                   );
                 })}
@@ -916,239 +845,16 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
         </div>
       </div>
 
-      {showAdd && <AddLPContactModal onClose={() => setShowAdd(false)} onSave={addContact} />}
+      {showAdd && <AddLPDrawer onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, newLP]); setShowAdd(false); }} />}
       {selected && (
-        <LPContactDetailDrawer 
-          contact={selected} 
-          investments={investments.filter(inv => inv.parent_lp_id === selected.id)}
+        <LPDetailDrawer
+          lp={selected}
           onClose={() => setSelected(null)}
-          onUpdate={loadLPData}
+          onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
+          onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
+          onPortal={() => { onPortal(selected); setSelected(null); }}
         />
       )}
-    </div>
-  );
-}
-
-// ── Add LP Contact Modal (Contact info only, no fund/commitment) ──
-function AddLPContactModal({ onClose, onSave }) {
-  const [form, setForm] = useState({
-    name: '',
-    firm: '',
-    email: '',
-    phone: '',
-    partner: PARTNERS[0]
-  });
-
-  const f = k => e => setForm({ ...form, [k]: e.target.value });
-
-  const handleSave = () => {
-    if (!form.name || !form.firm || !form.email) {
-      alert('Please fill in name, firm, and email');
-      return;
-    }
-    onSave(form);
-  };
-
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="drawer" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div className="drawer-title">Add LP Contact</div>
-          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
-        </div>
-        <div className="drawer-body">
-          <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginBottom: 20 }}>
-            Add contact information only. Investments will be added from individual fund pages.
-          </p>
-          <div className="form-grid">
-            <div className="field span2">
-              <label>Name *</label>
-              <input value={form.name} onChange={f('name')} placeholder="John Smith" />
-            </div>
-            <div className="field span2">
-              <label>Firm *</label>
-              <input value={form.firm} onChange={f('firm')} placeholder="Acme Ventures" />
-            </div>
-            <div className="field span2">
-              <label>Email *</label>
-              <input type="email" value={form.email} onChange={f('email')} placeholder="john@acme.com" />
-            </div>
-            <div className="field">
-              <label>Phone</label>
-              <input value={form.phone} onChange={f('phone')} placeholder="(555) 123-4567" />
-            </div>
-            <div className="field">
-              <label>Partner</label>
-              <select value={form.partner} onChange={f('partner')}>
-                {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-          </div>
-        </div>
-        <div className="drawer-footer">
-          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add Contact</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── LP Contact Detail Drawer (Shows all investments) ──
-function LPContactDetailDrawer({ contact, investments, onClose, onUpdate }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(contact);
-
-  const handleSave = async () => {
-    try {
-      const { error } = await supabase
-        .from('lps')
-        .update({
-          name: form.name,
-          firm: form.firm,
-          email: form.email,
-          phone: form.phone,
-          partner: form.partner
-        })
-        .eq('id', contact.id);
-
-      if (error) throw error;
-
-      setEditing(false);
-      onUpdate();
-    } catch (error) {
-      console.error('Error updating contact:', error);
-      alert('Error updating contact: ' + error.message);
-    }
-  };
-
-  const totalCommit = investments.reduce((s, inv) => s + (inv.commitment || 0), 0);
-  const totalFunded = investments.reduce((s, inv) => s + (inv.funded || 0), 0);
-  const totalNAV = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
-
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="drawer large" onClick={e => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div>
-            <div className="drawer-title">{contact.name}</div>
-            <div className="drawer-subtitle">{contact.firm}</div>
-          </div>
-          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
-        </div>
-
-        <div className="drawer-body">
-          {editing ? (
-            <div className="form-grid" style={{ marginBottom: 24 }}>
-              <div className="field span2">
-                <label>Name</label>
-                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="field span2">
-                <label>Firm</label>
-                <input value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} />
-              </div>
-              <div className="field span2">
-                <label>Email</label>
-                <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Phone</label>
-                <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-              </div>
-              <div className="field">
-                <label>Partner</label>
-                <select value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })}>
-                  {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-            </div>
-          ) : (
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>EMAIL</div>
-                  <div style={{ fontSize: 14 }}>{contact.email}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>PHONE</div>
-                  <div style={{ fontSize: 14 }}>{contact.phone || '—'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>PARTNER</div>
-                  <div><span className="stat-badge badge-blue">{contact.partner}</span></div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fund Investments</h3>
-            {editing ? (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-outline btn-sm" onClick={() => { setEditing(false); setForm(contact); }}>Cancel</button>
-                <button className="btn btn-primary btn-sm" onClick={handleSave}>Save</button>
-              </div>
-            ) : (
-              <button className="btn btn-outline btn-sm" onClick={() => setEditing(true)}>
-                <Icon name="edit" size={14} /> Edit Contact
-              </button>
-            )}
-          </div>
-
-          {investments.length === 0 ? (
-            <div className="empty" style={{ padding: '30px 20px' }}>
-              <p style={{ color: 'var(--ink-muted)' }}>No fund investments yet</p>
-              <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 8 }}>
-                Add this LP to a fund from the fund's page
-              </p>
-            </div>
-          ) : (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL COMMITMENT</div>
-                  <div style={{ fontSize: 18, fontWeight: 600 }}>{fmtMoney(totalCommit)}</div>
-                </div>
-                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL FUNDED</div>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold)' }}>{fmtMoney(totalFunded)}</div>
-                </div>
-                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
-                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL NAV</div>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--green)' }}>{fmtMoney(totalNAV)}</div>
-                </div>
-              </div>
-
-              <table>
-                <thead>
-                  <tr>
-                    <th>Fund</th>
-                    <th>Stage</th>
-                    <th>Commitment</th>
-                    <th>Funded</th>
-                    <th>NAV</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {investments.map(inv => {
-                    const s = stageInfo(inv.stage);
-                    return (
-                      <tr key={inv.id}>
-                        <td><span className="stat-badge badge-gold">{inv.fund?.name?.replace('Decisive Point ', '') || 'Unknown'}</span></td>
-                        <td><span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span></td>
-                        <td>{fmtMoney(inv.commitment || 0)}</td>
-                        <td style={{ color: 'var(--gold)' }}>{fmtMoney(inv.funded || 0)}</td>
-                        <td style={{ color: 'var(--green)' }}>{fmtMoney(inv.nav || 0)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          )}
-        </div>
-      </div>
     </div>
   );
 }
@@ -1344,7 +1050,6 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
 
           {tab === "contacts" && (
             <div>
-              {/* Primary Contact */}
               <div style={{ marginBottom: 24 }}>
                 <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Primary Contact
@@ -1357,7 +1062,6 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                 </div>
               </div>
 
-              {/* Additional Contacts */}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={{ fontSize: 11, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   Additional Contacts
