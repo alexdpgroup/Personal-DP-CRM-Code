@@ -1196,15 +1196,90 @@ function AddContactModal({ lpId, onClose, onSave }) {
 // ── Add LP Drawer ─────────────────────────────────────────────────────────────
 function AddLPDrawer({ onClose, onSave }) {
   const [form, setForm] = useState({
-    name: "", firm: "", email: "", phone: "",
-    stage: "outreach", tier: "HNW", partner: PARTNERS[0],
-    commitment: 0, funded: 0, nav: 0,
-    fund: FUNDS[2], notes: [], docs: [], distributions: []
+    name: "", // Primary contact name
+    firm: "",
+    email: "",
+    phone: "",
+    additionalContacts: []
   });
 
-  const save = () => {
-    if (!form.name.trim()) return;
-    onSave({ ...form, id: "lp" + Date.now() });
+  const [showAddContact, setShowAddContact] = useState(false);
+
+  const addAdditionalContact = () => {
+    if (form.additionalContacts.length >= 3) {
+      alert('Maximum 3 additional contacts');
+      return;
+    }
+    setShowAddContact(true);
+  };
+
+  const saveAdditionalContact = (contact) => {
+    setForm({
+      ...form,
+      additionalContacts: [...form.additionalContacts, contact]
+    });
+    setShowAddContact(false);
+  };
+
+  const removeContact = (index) => {
+    setForm({
+      ...form,
+      additionalContacts: form.additionalContacts.filter((_, i) => i !== index)
+    });
+  };
+
+  const save = async () => {
+    if (!form.name.trim() || !form.firm.trim()) {
+      alert('Please enter LP/Firm name and Primary Contact');
+      return;
+    }
+
+    try {
+      // Create LP record in Supabase
+      const { data: lp, error: lpError } = await supabase
+        .from('lps')
+        .insert([{
+          name: form.name, // Primary contact name
+          firm: form.firm,
+          email: form.email,
+          phone: form.phone,
+          stage: 'outreach',
+          partner: PARTNERS[0],
+          commitment: 0,
+          funded: 0,
+          nav: 0,
+          fund: null, // Will be assigned from fund pages
+          notes: [],
+          docs: [],
+          distributions: []
+        }])
+        .select()
+        .single();
+
+      if (lpError) throw lpError;
+
+      // Add additional contacts
+      if (form.additionalContacts.length > 0) {
+        const contactsToInsert = form.additionalContacts.map(c => ({
+          lp_id: lp.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          role: c.role
+        }));
+
+        const { error: contactsError } = await supabase
+          .from('lp_additional_contacts')
+          .insert(contactsToInsert);
+
+        if (contactsError) throw contactsError;
+      }
+
+      onSave(lp);
+    } catch (error) {
+      console.error('Error adding LP:', error);
+      alert('Error adding LP: ' + error.message);
+    }
   };
 
   const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -1218,30 +1293,94 @@ function AddLPDrawer({ onClose, onSave }) {
         </div>
         <div className="drawer-body">
           <div className="form-grid">
-            <div className="field"><label>Full Name *</label><input value={form.name} onChange={f("name")} placeholder="Jane Smith" /></div>
-            <div className="field"><label>Firm / Organization</label><input value={form.firm} onChange={f("firm")} placeholder="Acme Capital" /></div>
-            <div className="field"><label>Email</label><input value={form.email} onChange={f("email")} /></div>
-            <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} /></div>
-            <div className="field"><label>Partner (Relationship Owner)</label>
-              <select value={form.partner} onChange={f("partner")}>{PARTNERS.map(p => <option key={p}>{p}</option>)}</select>
+            <div className="field span2"><label>LP / Firm Name *</label><input value={form.firm} onChange={f("firm")} placeholder="Trophy Point Partners" /></div>
+            <div className="field span2"><label>Primary Contact Name *</label><input value={form.name} onChange={f("name")} placeholder="Thomas Hendrix" /></div>
+            <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="thomas@trophypoint.com" /></div>
+            <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
+          </div>
+
+          {/* Additional Contacts */}
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h4 style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Additional Contacts ({form.additionalContacts.length}/3)</h4>
+              {form.additionalContacts.length < 3 && (
+                <button className="btn btn-outline btn-sm" onClick={addAdditionalContact}>
+                  <Icon name="plus" size={12} /> Add Contact
+                </button>
+              )}
             </div>
-            <div className="field"><label>Tier</label>
-              <select value={form.tier} onChange={f("tier")}>{TIERS.map(t => <option key={t}>{t}</option>)}</select>
-            </div>
-            <div className="field"><label>Fund</label>
-              <select value={form.fund} onChange={f("fund")}>{FUNDS.map(f => <option key={f}>{f}</option>)}</select>
-            </div>
-            <div className="field"><label>Stage</label>
-              <select value={form.stage} onChange={f("stage")}>{STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
-            </div>
-            <div className="field"><label>Commitment ($)</label><input type="number" value={form.commitment} onChange={e => setForm({ ...form, commitment: +e.target.value })} /></div>
-            <div className="field"><label>Funded ($)</label><input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} /></div>
-            <div className="field span2"><label>NAV / Current Mark ($)</label><input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} /></div>
+
+            {form.additionalContacts.map((contact, i) => (
+              <div key={i} style={{ background: 'var(--surface)', padding: '12px', borderRadius: 6, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{contact.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{contact.email} · {contact.role}</div>
+                </div>
+                <button className="btn btn-ghost btn-sm" onClick={() => removeContact(i)}>
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={save}>Add LP</button>
+        </div>
+
+        {showAddContact && (
+          <AddAdditionalContactModal
+            onClose={() => setShowAddContact(false)}
+            onSave={saveAdditionalContact}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Mini modal for adding additional contact
+function AddAdditionalContactModal({ onClose, onSave }) {
+  const [contact, setContact] = useState({ name: '', email: '', phone: '', role: '' });
+
+  const handleSave = () => {
+    if (!contact.name) {
+      alert('Please enter a name');
+      return;
+    }
+    onSave(contact);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose} style={{ zIndex: 10001 }}>
+      <div className="drawer" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Add Additional Contact</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2">
+              <label>Name *</label>
+              <input value={contact.name} onChange={e => setContact({ ...contact, name: e.target.value })} placeholder="Laura Barnett" />
+            </div>
+            <div className="field span2">
+              <label>Email</label>
+              <input type="email" value={contact.email} onChange={e => setContact({ ...contact, email: e.target.value })} placeholder="laura@example.com" />
+            </div>
+            <div className="field">
+              <label>Phone</label>
+              <input value={contact.phone} onChange={e => setContact({ ...contact, phone: e.target.value })} placeholder="(555) 123-4567" />
+            </div>
+            <div className="field">
+              <label>Role</label>
+              <input value={contact.role} onChange={e => setContact({ ...contact, role: e.target.value })} placeholder="Operations" />
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Add</button>
         </div>
       </div>
     </div>
@@ -1326,7 +1465,7 @@ function PortfolioPage() {
   const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
 
   useEffect(() => {
-    loadData("dp_schedule_v1", SEED_SCHEDULE).then(data => setSchedule(data));
+    loadData("dp_schedule_v1", []).then(data => setSchedule(data));
   }, []);
 
   const saveSchedule = (updated) => { setSchedule(updated); saveData("dp_schedule_v1", updated); };
@@ -2519,48 +2658,51 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
 
 // ── Add LP to Fund Modal ──
 function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
-  const [selectedContactId, setSelectedContactId] = useState('');
+  const [allLPs, setAllLPs] = useState([]);
+  const [selectedLPId, setSelectedLPId] = useState('');
   const [form, setForm] = useState({
     stage: 'outreach',
-    commitment: 0,
-    funded: 0,
-    nav: 0
+    commitment: 0
   });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadAllLPs();
+  }, []);
+
+  const loadAllLPs = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('lps')
+        .select('*')
+        .is('fund', null) // Only LPs not yet assigned to a fund
+        .order('name');
+
+      if (error) throw error;
+      setAllLPs(data || []);
+    } catch (error) {
+      console.error('Error loading LPs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async () => {
-    if (!selectedContactId) {
-      alert('Please select an LP contact');
+    if (!selectedLPId) {
+      alert('Please select an LP');
       return;
     }
 
     try {
-      // Get fund ID
-      const { data: fundData } = await supabase
-        .from('funds')
-        .select('id')
-        .eq('name', fundName)
-        .single();
-
-      if (!fundData) throw new Error('Fund not found');
-
-      // Create investment record
+      // Update the LP record with fund assignment
       const { error } = await supabase
         .from('lps')
-        .insert([{
-          fund_id: fundData.id,
-          parent_lp_id: selectedContactId,
-          is_contact_record: false,
+        .update({
+          fund: fundName,
           stage: form.stage,
-          commitment: form.commitment,
-          funded: form.funded,
-          nav: form.nav,
-          // Copy contact info for display purposes (denormalized)
-          name: contacts.find(c => c.id === selectedContactId)?.name || '',
-          firm: contacts.find(c => c.id === selectedContactId)?.firm || '',
-          email: contacts.find(c => c.id === selectedContactId)?.email || '',
-          phone: contacts.find(c => c.id === selectedContactId)?.phone || '',
-          partner: contacts.find(c => c.id === selectedContactId)?.partner || ''
-        }]);
+          commitment: form.commitment
+        })
+        .eq('id', selectedLPId);
 
       if (error) throw error;
 
@@ -2572,7 +2714,7 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
     }
   };
 
-  const selectedContact = contacts.find(c => c.id === selectedContactId);
+  const selectedLP = allLPs.find(lp => lp.id === selectedLPId);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -2582,71 +2724,66 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
           <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="drawer-body">
-          <div className="form-grid">
-            <div className="field span2">
-              <label>Select LP Contact *</label>
-              <select 
-                value={selectedContactId} 
-                onChange={e => setSelectedContactId(e.target.value)}
-                style={{ fontSize: 14 }}
-              >
-                <option value="">Choose from LP Directory...</option>
-                {contacts.map(contact => (
-                  <option key={contact.id} value={contact.id}>
-                    {contact.name} ({contact.firm})
-                  </option>
-                ))}
-              </select>
-              {selectedContact && (
-                <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
-                  {selectedContact.email} · Partner: {selectedContact.partner}
-                </div>
-              )}
+          {loading ? (
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--ink-muted)' }}>
+              Loading LPs...
             </div>
+          ) : allLPs.length === 0 ? (
+            <div className="empty" style={{ padding: '30px 20px' }}>
+              <p>No LPs available to add</p>
+              <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 8 }}>
+                Add LPs to your directory first
+              </p>
+            </div>
+          ) : (
+            <div className="form-grid">
+              <div className="field span2">
+                <label>Select LP *</label>
+                <select 
+                  value={selectedLPId} 
+                  onChange={e => setSelectedLPId(e.target.value)}
+                  style={{ fontSize: 14 }}
+                >
+                  <option value="">Choose from LP Directory...</option>
+                  {allLPs.map(lp => (
+                    <option key={lp.id} value={lp.id}>
+                      {lp.firm} - {lp.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedLP && (
+                  <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
+                    {selectedLP.email} {selectedLP.phone && `· ${selectedLP.phone}`}
+                  </div>
+                )}
+              </div>
 
-            <div className="field">
-              <label>Stage</label>
-              <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
-                {STAGES.map(s => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
-            </div>
+              <div className="field">
+                <label>Stage</label>
+                <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
+                  {STAGES.map(s => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="field">
-              <label>Commitment ($)</label>
-              <input
-                type="number"
-                value={form.commitment}
-                onChange={e => setForm({ ...form, commitment: parseFloat(e.target.value) || 0 })}
-                placeholder="5000000"
-              />
+              <div className="field">
+                <label>Commitment ($)</label>
+                <input
+                  type="number"
+                  value={form.commitment}
+                  onChange={e => setForm({ ...form, commitment: parseFloat(e.target.value) || 0 })}
+                  placeholder="5000000"
+                />
+              </div>
             </div>
-
-            <div className="field">
-              <label>Funded ($)</label>
-              <input
-                type="number"
-                value={form.funded}
-                onChange={e => setForm({ ...form, funded: parseFloat(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-
-            <div className="field">
-              <label>NAV ($)</label>
-              <input
-                type="number"
-                value={form.nav}
-                onChange={e => setForm({ ...form, nav: parseFloat(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-          </div>
+          )}
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add to Fund</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={!selectedLPId}>
+            Add to Fund
+          </button>
         </div>
       </div>
     </div>
