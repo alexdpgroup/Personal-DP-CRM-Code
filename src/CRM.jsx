@@ -797,15 +797,17 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
       setFunds(fundData || []);
     } catch (error) {
       console.error('Error loading LP data:', error);
+      setLpData([]);
+      setFunds([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter LPs
-  const filteredLPs = lpData.filter(lp => {
+  // Filter LPs - ensure lpData is always an array
+  const filteredLPs = (lpData || []).filter(lp => {
     const q = search.toLowerCase();
-    const matchQ = !q || lp.name.toLowerCase().includes(q) || lp.primaryContact?.name.toLowerCase().includes(q);
+    const matchQ = !q || lp.name?.toLowerCase().includes(q) || lp.primaryContact?.name?.toLowerCase().includes(q);
     const matchPartner = filterPartner === "all" || lp.partner === filterPartner;
     const matchFund = filterFund === "all" || lp.fund?.name === filterFund;
     return matchQ && matchPartner && matchFund;
