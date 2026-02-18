@@ -1564,7 +1564,14 @@ function PortfolioPage() {
                 const compGL       = compValue - compInvested;
                 const compMOIC     = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
                 const isOpen       = expanded[comp.company];
-                const shortFund    = comp.fund.replace("Decisive Point ", "");
+                
+                // Get unique funds across all financings
+                const fundsInvested = [...new Set(comp.financings.map(f => f.fund).filter(Boolean))];
+                const fundDisplay = fundsInvested.length === 1 
+                  ? fundsInvested[0].replace("Decisive Point ", "")
+                  : fundsInvested.length > 1 
+                    ? `${fundsInvested.length} funds`
+                    : "—";
 
                 return [
                   /* ── Company summary row (accordion header) ── */
@@ -1586,7 +1593,11 @@ function PortfolioPage() {
                       </div>
                     </td>
                     <td><span className="badge-blue stat-badge">{comp.sector}</span></td>
-                    <td><span className="tag" style={{ fontSize: 11 }}>{shortFund}</span></td>
+                    <td>
+                      <span className="tag" style={{ fontSize: 11 }} title={fundsInvested.length > 1 ? fundsInvested.join(', ') : ''}>
+                        {fundDisplay}
+                      </span>
+                    </td>
                     <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
                     <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
@@ -1655,7 +1666,26 @@ function PortfolioPage() {
                           <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
                         </td>
                         <td></td>
-                        <td></td>
+                        <td style={{ fontSize: 12 }}>
+                          {isEditing("fund")
+                            ? <select 
+                                autoFocus 
+                                defaultValue={fin.fund || FUNDS[0]} 
+                                onBlur={e => editCell("fund", e.target.value, false)}
+                                onKeyDown={e => { if (e.key === "Enter") editCell("fund", e.target.value, false); if (e.key === "Escape") setEditingCell(null); }}
+                                style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)", width: '100%' }}
+                              >
+                                {FUNDS.map(f => <option key={f} value={f}>{f}</option>)}
+                              </select>
+                            : <span 
+                                onClick={() => setEditingCell(cellKey("fund"))} 
+                                style={{ cursor: "pointer", fontSize: 11, color: "var(--ink)" }}
+                                title="Click to change fund"
+                              >
+                                {fin.fund ? fin.fund.replace("Decisive Point ", "") : "Select fund"}
+                              </span>
+                          }
+                        </td>
                         <td style={{ fontSize: 12 }}>
                           {isEditing("date")
                             ? <input autoFocus defaultValue={fin.date} type="date" onBlur={e => editCell("date", e.target.value, false)} style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)" }} />
@@ -1730,14 +1760,20 @@ function PortfolioPage() {
 }
 
 function AddFinancingModal({ company, onClose, onSave }) {
-  const [form, setForm] = useState({ asset: "SAFE", date: "", invested: 0, costPerShare: 0 });
+  const [form, setForm] = useState({ 
+    asset: "SAFE", 
+    date: "", 
+    invested: 0, 
+    costPerShare: 0,
+    fund: FUNDS[0] // Default to first fund
+  });
   
   // Auto-calculate shares when invested or costPerShare changes
   const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
   
   const handleSave = () => {
-    if (!form.date || !form.invested || !form.costPerShare) {
-      alert('Please fill in Date, Investment Amount, and Cost per Share');
+    if (!form.date || !form.invested || !form.costPerShare || !form.fund) {
+      alert('Please fill in Date, Investment Amount, Cost per Share, and Fund');
       return;
     }
     
@@ -1767,6 +1803,11 @@ function AddFinancingModal({ company, onClose, onSave }) {
             <div className="field"><label>Asset / Round</label>
               <select value={form.asset} onChange={f("asset")}>
                 {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Fund / SPV *</label>
+              <select value={form.fund} onChange={f("fund")}>
+                {FUNDS.map(fund => <option key={fund}>{fund}</option>)}
               </select>
             </div>
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
@@ -1808,7 +1849,7 @@ function AddFinancingModal({ company, onClose, onSave }) {
 }
 
 function AddCompanyModal({ onClose, onSave }) {
-  const [form, setForm] = useState({ company: "", sector: "", fund: FUNDS[2] });
+  const [form, setForm] = useState({ company: "", sector: "" });
   const f = k => e => setForm({ ...form, [k]: e.target.value });
   return (
     <div className="overlay" onClick={onClose}>
@@ -1820,10 +1861,10 @@ function AddCompanyModal({ onClose, onSave }) {
         <div className="drawer-body">
           <div className="form-grid">
             <div className="field span2"><label>Company Name</label><input value={form.company} onChange={f("company")} placeholder="Acme Corp" /></div>
-            <div className="field"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
-            <div className="field"><label>Fund</label>
-              <select value={form.fund} onChange={f("fund")}>{FUNDS.map(fd => <option key={fd}>{fd}</option>)}</select>
-            </div>
+            <div className="field span2"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 12, padding: '10px', background: 'var(--surface)', borderRadius: 6 }}>
+            💡 After adding the company, add financing rounds to specify which fund(s) invested.
           </div>
         </div>
         <div className="drawer-footer">
@@ -2399,16 +2440,19 @@ function InvestorPortal({ lp, onExit }) {
 // ── FUND PAGE ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
+  const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
   const [investments, setInvestments] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [portfolio, setPortfolio] = useState([]);
   const [loading, setLoading] = useState(true);
   
   const fd = (fundDefs || FUND_DEFS).find(f => f.name === fundName) || FUND_DEFS[0];
 
   useEffect(() => {
     loadFundData();
+    loadPortfolio();
   }, [fundName]);
 
   const loadFundData = async () => {
@@ -2483,6 +2527,25 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
       setContacts([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPortfolio = async () => {
+    try {
+      const { data, error } = await window.storage.get('dp_schedule_v1');
+      if (error) {
+        console.error('Portfolio load error:', error);
+        setPortfolio([]);
+      } else if (data?.value) {
+        const allCompanies = JSON.parse(data.value);
+        // Load all companies - filtering by fund happens in FundPortfolioTab
+        setPortfolio(allCompanies);
+      } else {
+        setPortfolio([]);
+      }
+    } catch (error) {
+      console.error('Portfolio load error:', error);
+      setPortfolio([]);
     }
   };
 
@@ -2579,6 +2642,45 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         ))}
       </div>
 
+      {/* ── Tabs ── */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 22, borderBottom: '2px solid var(--border)' }}>
+        <button 
+          onClick={() => setActiveTab('lps')}
+          style={{
+            background: activeTab === 'lps' ? 'var(--gold-light)' : 'transparent',
+            border: 'none',
+            borderBottom: activeTab === 'lps' ? '3px solid var(--gold-dark)' : '3px solid transparent',
+            color: activeTab === 'lps' ? 'var(--gold-dark)' : 'var(--ink-muted)',
+            padding: '12px 24px',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+            marginBottom: -2,
+            transition: 'all 0.2s'
+          }}
+        >
+          LPs & Pipeline
+        </button>
+        <button 
+          onClick={() => setActiveTab('portfolio')}
+          style={{
+            background: activeTab === 'portfolio' ? 'var(--gold-light)' : 'transparent',
+            border: 'none',
+            borderBottom: activeTab === 'portfolio' ? '3px solid var(--gold-dark)' : '3px solid transparent',
+            color: activeTab === 'portfolio' ? 'var(--gold-dark)' : 'var(--ink-muted)',
+            padding: '12px 24px',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+            marginBottom: -2,
+            transition: 'all 0.2s'
+          }}
+        >
+          Portfolio ({portfolio.length})
+        </button>
+      </div>
+
+      {activeTab === 'lps' && (
       <div className="two-col">
         {/* ── Pipeline prospects ── */}
         <div className="card">
@@ -2708,6 +2810,11 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             )}
         </div>
       </div>
+      )}
+
+      {activeTab === 'portfolio' && (
+        <FundPortfolioTab portfolio={portfolio} fundName={fundName} />
+      )}
 
       {selectedLP && (
         <LPDetailDrawer
@@ -2730,6 +2837,200 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           onSave={loadFundData}
         />
       )}
+    </div>
+  );
+}
+
+// ── Fund Portfolio Tab ──
+function FundPortfolioTab({ portfolio, fundName }) {
+  const [expanded, setExpanded] = useState({});
+  
+  const toggleExpand = (company) => setExpanded(prev => ({ ...prev, [company]: !prev[company] }));
+  
+  // Filter companies to only show those with at least one financing from this fund
+  // And within each company, only show financings from this fund
+  const fundPortfolio = portfolio
+    .map(comp => ({
+      ...comp,
+      financings: comp.financings.filter(f => f.fund === fundName)
+    }))
+    .filter(comp => comp.financings.length > 0);
+  
+  // Calculate fund-level totals (only from this fund's financings)
+  const totalInvested = fundPortfolio.reduce((total, comp) => {
+    return total + comp.financings.reduce((s, f) => s + f.invested, 0);
+  }, 0);
+  
+  const totalValue = fundPortfolio.reduce((total, comp) => {
+    const latestRound = comp.financings[comp.financings.length - 1];
+    const syncedFMV = latestRound?.costPerShare || 0;
+    
+    return total + comp.financings.reduce((s, f) => {
+      const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
+      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+      return s + (shares * fmv);
+    }, 0);
+  }, 0);
+  
+  const totalGainLoss = totalValue - totalInvested;
+  const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
+
+  if (fundPortfolio.length === 0) {
+    return (
+      <div className="card">
+        <div className="card-body">
+          <div className="empty" style={{ padding: '60px 20px' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+            <h3 style={{ marginBottom: 8 }}>No Portfolio Companies Yet</h3>
+            <p style={{ color: 'var(--ink-muted)', marginBottom: 20 }}>
+              Add portfolio companies on the main Portfolio page and assign financing rounds to {fundName}.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Fund Portfolio Stats */}
+      <div className="stats-row" style={{ marginBottom: 22 }}>
+        <StatCard label="Total Invested" value={fmtMoney(totalInvested, true)} sub={`${fundPortfolio.length} companies`} />
+        <StatCard label="Portfolio Value" value={fmtMoney(totalValue, true)} sub="Current marks" gold />
+        <StatCard label="Blended MOIC" value={`${blendedMOIC}x`} sub="Multiple on invested capital" />
+        <StatCard label="Unrealized Gain" value={fmtMoney(totalGainLoss, true)} sub={totalGainLoss >= 0 ? "Gain" : "Loss"} />
+      </div>
+
+      {/* Portfolio Table */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">{fundName} Portfolio</span>
+        </div>
+        
+        <div style={{ background: 'var(--gold-light)', padding: '10px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--gold-dark)' }}>
+          <strong>💡 Auto-calculations:</strong> Shares = Investment ÷ Cost/Share  •  Value = Shares × FMV/Share  •  FMV syncs from latest round
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ minWidth: 1000 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 220 }}>Company / Asset</th>
+                <th>Sector</th>
+                <th>Inv. Date</th>
+                <th style={{ textAlign: "right" }}>Shares</th>
+                <th style={{ textAlign: "right" }}>Invested</th>
+                <th style={{ textAlign: "right" }}>Value</th>
+                <th style={{ textAlign: "right" }}>Gain / Loss</th>
+                <th style={{ textAlign: "right" }}>Cost / Sh.</th>
+                <th style={{ textAlign: "right" }}>FMV / Sh.</th>
+                <th style={{ textAlign: "right" }}>MOIC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fundPortfolio.map((comp, compIdx) => {
+                const latestRound = comp.financings[comp.financings.length - 1];
+                const syncedFMV = latestRound?.costPerShare || 0;
+                
+                const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
+                const compValue = comp.financings.reduce((s, f) => {
+                  const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
+                  const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+                  return s + (shares * fmv);
+                }, 0);
+                const compGL = compValue - compInvested;
+                const compMOIC = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
+                const isOpen = expanded[comp.company];
+
+                return [
+                  /* Company summary row */
+                  <tr key={comp.company + "_header"}
+                    onClick={() => toggleExpand(comp.company)}
+                    style={{ background: "#faf9f6", cursor: "pointer", borderTop: "2px solid var(--border)" }}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{
+                          display: "inline-block", width: 16, height: 16, lineHeight: "16px",
+                          textAlign: "center", fontSize: 10, color: "var(--gold-dark)",
+                          transition: "transform 0.2s",
+                          transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
+                        }}>▶</span>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{comp.company}</div>
+                          <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span className="badge-blue stat-badge">{comp.sector}</span></td>
+                    <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
+                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
+                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right" }}>
+                      <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
+                    </td>
+                  </tr>,
+
+                  /* Financing rows (expanded) */
+                  ...(isOpen ? comp.financings.map((fin, finIdx) => {
+                    const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
+                    const calculatedShares = fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares;
+                    const calculatedValue = calculatedShares * displayFMV;
+                    const gl = calculatedValue - fin.invested;
+                    const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
+                    
+                    return (
+                      <tr key={fin.id} style={{ background: "#fff" }}>
+                        <td style={{ paddingLeft: 44 }}>
+                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
+                        </td>
+                        <td></td>
+                        <td style={{ fontSize: 12 }}>{fin.date}</td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: "var(--ink-muted)" }}>
+                          {calculatedShares.toLocaleString()}
+                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>{fmtMoney(fin.invested)}</td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
+                          {fmtMoney(calculatedValue)}
+                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>
+                          {fin.costPerShare > 0 ? `$${fin.costPerShare.toFixed(2)}` : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>
+                          {displayFMV > 0 ? (
+                            <span style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
+                              ${displayFMV.toFixed(2)}
+                            </span>
+                          ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
+                        </td>
+                      </tr>
+                    );
+                  }) : [])
+                ];
+              })}
+
+              {/* Grand totals row */}
+              <tr style={{ background: "var(--ink)", color: "#fff", borderTop: "2px solid var(--border)" }}>
+                <td colSpan={4} style={{ fontWeight: 600, fontSize: 13, color: "#fff", paddingLeft: 18 }}>Fund Total</td>
+                <td style={{ textAlign: "right", fontWeight: 700, color: "var(--gold-light)" }}>{fmtMoney(totalInvested)}</td>
+                <td style={{ textAlign: "right", fontWeight: 700, color: totalValue >= totalInvested ? "#a8f0c6" : "#f0a8a8" }}>{fmtMoney(totalValue)}</td>
+                <td style={{ textAlign: "right", fontWeight: 700, color: totalGainLoss >= 0 ? "#a8f0c6" : "#f0a8a8" }}>{totalGainLoss >= 0 ? "+" : ""}{fmtMoney(totalGainLoss)}</td>
+                <td colSpan={2}></td>
+                <td style={{ textAlign: "right" }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--gold-light)" }}>{blendedMOIC}x</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
