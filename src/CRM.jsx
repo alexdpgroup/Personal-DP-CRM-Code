@@ -781,10 +781,13 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
 
       if (error) throw error;
 
-      // Get primary contact for each LP
+      // Get primary contact for each LP - ensure contacts is always an array
       const enrichedData = (data || []).map(lp => ({
         ...lp,
-        primaryContact: lp.contacts?.find(c => c.is_primary) || lp.contacts?.[0] || null
+        contacts: Array.isArray(lp.contacts) ? lp.contacts : [],
+        primaryContact: Array.isArray(lp.contacts) 
+          ? (lp.contacts.find(c => c.is_primary) || lp.contacts[0] || null)
+          : null
       }));
 
       setLpData(enrichedData);
@@ -2517,10 +2520,13 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         console.error('Investment load error:', invError);
         setInvestments([]);
       } else {
-        // Add primary contact reference to each investment
+        // Add primary contact reference to each investment - ensure contacts is array
         const enriched = (investmentData || []).map(inv => ({
           ...inv,
-          primaryContact: inv.contacts?.find(c => c.is_primary) || inv.contacts?.[0] || null
+          contacts: Array.isArray(inv.contacts) ? inv.contacts : [],
+          primaryContact: Array.isArray(inv.contacts)
+            ? (inv.contacts.find(c => c.is_primary) || inv.contacts[0] || null)
+            : null
         }));
         setInvestments(enriched);
       }
