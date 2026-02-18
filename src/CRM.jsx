@@ -1454,7 +1454,6 @@ function PipelinePage({ lps, saveLPs }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Seed schedule of investments data — each company has multiple financing rounds
-const SEED_SCHEDULE = [
 const SEED_SCHEDULE = []; // Removed seed data
 
 function PortfolioPage() {
