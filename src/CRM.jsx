@@ -614,11 +614,12 @@ export default function CRM({ session, onLogout }) {
 // ── DASHBOARD PAGE ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function DashboardPage({ lps, fundDefs, onFund }) {
-  const closed = lps.filter(l => l.stage === "closed");
-  const totalCommit = lps.reduce((s, l) => s + (l.commitment || 0), 0);
-  const totalFunded = lps.reduce((s, l) => s + (l.funded || 0), 0);
-  const totalNAV = lps.reduce((s, l) => s + (l.nav || 0), 0);
-  const pipelineCount = lps.filter(l => l.stage !== "closed").length;
+  const safeLps = lps || [];
+  const closed = safeLps.filter(l => l.stage === "closed");
+  const totalCommit = safeLps.reduce((s, l) => s + (l.commitment || 0), 0);
+  const totalFunded = safeLps.reduce((s, l) => s + (l.funded || 0), 0);
+  const totalNAV = safeLps.reduce((s, l) => s + (l.nav || 0), 0);
+  const pipelineCount = safeLps.filter(l => l.stage !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
 
   return (
@@ -635,7 +636,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
           <span className="card-title">Recent Activity</span>
         </div>
         <div className="card-body">
-          {lps.filter(l => l.notes.length > 0).slice(0, 6).map(lp => {
+          {safeLps.filter(l => l.notes?.length > 0).slice(0, 6).map(lp => {
             const last = lp.notes[lp.notes.length - 1];
             const s = stageInfo(lp.stage);
             return (
@@ -665,7 +666,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
         </div>
         <div className="card-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 20 }}>
           {funds.map(fd => {
-            const fundLPs = lps.filter(l => l.fund === fd.name);
+            const fundLPs = safeLps.filter(l => l.fund === fd.name);
             const committed = fundLPs.reduce((s, l) => s + (l.commitment || 0), 0);
             const funded = fundLPs.reduce((s, l) => s + (l.funded || 0), 0);
             const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
