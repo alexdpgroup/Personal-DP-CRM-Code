@@ -307,7 +307,7 @@ const STAGES = [
 ];
 
 const TIERS = ["Strategic", "Institutional", "Family Office", "HNW", "UHNW"];
-const PARTNERS = ["Sarah Chen", "Marcus Webb", "Priya Nair", "James Liu"];
+const PARTNERS = ["Thomas Hendrix", "Andrew Price", "Eric Horan", "Debi O'Connell", "Matthew Williams"];
 const FUNDS = ["Decisive Point Fund I", "Decisive Point Fund II", "Decisive Point Fund III (Current)"];
 const FUND_DEFS = [
   { name: "Decisive Point Fund I",             target: 10000000,  status: "closed",  vintage: 2018 },
