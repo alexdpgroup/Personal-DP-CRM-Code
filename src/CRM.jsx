@@ -571,7 +571,7 @@ export default function CRM({ session, onLogout }) {
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} onFund={goFund} />}
             {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
-            {page === "portfolio" && <PortfolioPage />}
+            {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
             {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
@@ -1456,12 +1456,15 @@ function PipelinePage({ lps, saveLPs }) {
 // Seed schedule of investments data — each company has multiple financing rounds
 const SEED_SCHEDULE = []; // Removed seed data
 
-function PortfolioPage() {
+function PortfolioPage({ fundDefs }) {
   const [schedule, setSchedule] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [addFinancingFor, setAddFinancingFor] = useState(null);
   const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
+
+  // Get fund names from fundDefs, or fall back to FUNDS constant
+  const fundNames = fundDefs?.map(f => f.name) || FUNDS;
 
   useEffect(() => {
     loadData("dp_schedule_v1", []).then(data => setSchedule(data));
@@ -1675,7 +1678,7 @@ function PortfolioPage() {
                                 onKeyDown={e => { if (e.key === "Enter") editCell("fund", e.target.value, false); if (e.key === "Escape") setEditingCell(null); }}
                                 style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)", width: '100%' }}
                               >
-                                {FUNDS.map(f => <option key={f} value={f}>{f}</option>)}
+                                {fundNames.map(f => <option key={f} value={f}>{f}</option>)}
                               </select>
                             : <span 
                                 onClick={() => setEditingCell(cellKey("fund"))} 
@@ -1743,6 +1746,7 @@ function PortfolioPage() {
       {addFinancingFor !== null && (
         <AddFinancingModal
           company={schedule[addFinancingFor]?.company}
+          fundNames={fundNames}
           onClose={() => setAddFinancingFor(null)}
           onSave={(fin) => addFinancing(addFinancingFor, fin)}
         />
@@ -1759,13 +1763,13 @@ function PortfolioPage() {
   );
 }
 
-function AddFinancingModal({ company, onClose, onSave }) {
+function AddFinancingModal({ company, fundNames, onClose, onSave }) {
   const [form, setForm] = useState({ 
     asset: "SAFE", 
     date: "", 
     invested: 0, 
     costPerShare: 0,
-    fund: FUNDS[0] // Default to first fund
+    fund: fundNames?.[0] || FUNDS[0] // Default to first fund from fundNames or FUNDS
   });
   
   // Auto-calculate shares when invested or costPerShare changes
@@ -1788,6 +1792,8 @@ function AddFinancingModal({ company, onClose, onSave }) {
   
   const f = k => e => setForm({ ...form, [k]: e.target.value });
   
+  const availableFunds = fundNames || FUNDS;
+  
   return (
     <div className="overlay" onClick={onClose}>
       <div className="drawer" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
@@ -1807,7 +1813,7 @@ function AddFinancingModal({ company, onClose, onSave }) {
             </div>
             <div className="field"><label>Fund / SPV *</label>
               <select value={form.fund} onChange={f("fund")}>
-                {FUNDS.map(fund => <option key={fund}>{fund}</option>)}
+                {availableFunds.map(fund => <option key={fund}>{fund}</option>)}
               </select>
             </div>
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
