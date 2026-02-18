@@ -2329,20 +2329,75 @@ function InvestorPortal({ lp, onExit }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
   const [selectedLP, setSelectedLP] = useState(null);
+  const [showAddLP, setShowAddLP] = useState(false);
+  const [investments, setInvestments] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
   const fd = (fundDefs || FUND_DEFS).find(f => f.name === fundName) || FUND_DEFS[0];
-  const fundLPs = lps.filter(l => l.fund === fundName);
-  const closedLPs = fundLPs.filter(l => l.stage === "closed");
-  const pipelineLPs = fundLPs.filter(l => l.stage !== "closed");
-  const committed = fundLPs.reduce((s, l) => s + (l.commitment || 0), 0);
-  const funded = fundLPs.reduce((s, l) => s + (l.funded || 0), 0);
-  const nav = fundLPs.reduce((s, l) => s + (l.nav || 0), 0);
+
+  useEffect(() => {
+    loadFundData();
+  }, [fundName]);
+
+  const loadFundData = async () => {
+    try {
+      // Get fund ID
+      const { data: fundData } = await supabase
+        .from('funds')
+        .select('id')
+        .eq('name', fundName)
+        .single();
+
+      if (!fundData) {
+        setLoading(false);
+        return;
+      }
+
+      // Load investment records for this fund
+      const { data: investmentData, error: invError } = await supabase
+        .from('lps')
+        .select('*, contact:parent_lp_id(*)')
+        .eq('fund_id', fundData.id)
+        .eq('is_contact_record', false)
+        .order('created_at', { ascending: false });
+
+      if (invError) throw invError;
+
+      // Load all contacts for dropdown
+      const { data: contactData, error: contactError } = await supabase
+        .from('lps')
+        .select('*')
+        .eq('is_contact_record', true)
+        .order('name');
+
+      if (contactError) throw contactError;
+
+      setInvestments(investmentData || []);
+      setContacts(contactData || []);
+    } catch (error) {
+      console.error('Error loading fund data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
+  }
+
+  const closedInvestments = investments.filter(inv => inv.stage === "closed");
+  const pipelineInvestments = investments.filter(inv => inv.stage !== "closed");
+  const committed = investments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const funded = investments.reduce((s, inv) => s + (inv.funded || 0), 0);
+  const nav = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
   const shortName = fundName.replace("Decisive Point ", "");
 
   // pipeline by stage
   const byStage = STAGES.map(s => ({
-    ...s, lps: fundLPs.filter(l => l.stage === s.id),
+    ...s, lps: investments.filter(inv => inv.stage === s.id),
   }));
 
   return (
@@ -2393,8 +2448,8 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           {[
             { label: "Committed",    val: fmtMoney(committed, true) },
             { label: "Funded",       val: fmtMoney(funded, true) },
-            { label: "Closed LPs",   val: closedLPs.length },
-            { label: "In Pipeline",  val: pipelineLPs.length },
+            { label: "Closed LPs",   val: closedInvestments.length },
+            { label: "In Pipeline",  val: pipelineInvestments.length },
             { label: nav > 0 ? "Portfolio NAV" : "Remaining", val: nav > 0 ? fmtMoney(nav, true) : fmtMoney(Math.max(fd.target - committed, 0), true) },
           ].map(item => (
             <div key={item.label} style={{ background: "var(--surface)", borderRadius: 8, padding: "12px 14px" }}>
@@ -2425,24 +2480,36 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Pipeline Prospects</span>
-            <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{pipelineLPs.length} active</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{pipelineInvestments.length} active</span>
+              <button className="btn btn-primary btn-sm" onClick={() => setShowAddLP(true)}>
+                <Icon name="plus" size={13} /> Add LP
+              </button>
+            </div>
           </div>
           <div className="card-body">
-            {pipelineLPs.length === 0
-              ? <div className="empty" style={{ padding: "30px" }}><p>No pipeline prospects for this fund.</p></div>
-              : pipelineLPs.map(lp => {
-                const s = stageInfo(lp.stage);
+            {pipelineInvestments.length === 0
+              ? <div className="empty" style={{ padding: "30px" }}>
+                  <p>No pipeline prospects for this fund.</p>
+                  <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={() => setShowAddLP(true)}>
+                    <Icon name="plus" size={13} /> Add First LP
+                  </button>
+                </div>
+              : pipelineInvestments.map(inv => {
+                const s = stageInfo(inv.stage);
+                const contactName = inv.contact?.name || 'Unknown';
+                const contactFirm = inv.contact?.firm || '';
                 return (
-                  <div key={lp.id} style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
-                    onClick={() => setSelectedLP(lp)}>
-                    <div className="avatar">{initials(lp.name)}</div>
+                  <div key={inv.id} style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
+                    onClick={() => setSelectedLP(inv)}>
+                    <div className="avatar">{initials(contactName)}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{lp.name}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{lp.firm}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <span className="stat-badge" style={{ background: s.bg, color: s.color, display: "block", marginBottom: 3 }}>{s.label}</span>
-                      {lp.commitment > 0 && <span style={{ fontSize: 12, color: "var(--gold-dark)", fontWeight: 600 }}>{fmtMoney(lp.commitment, true)}</span>}
+                      {inv.commitment > 0 && <span style={{ fontSize: 12, color: "var(--gold-dark)", fontWeight: 600 }}>{fmtMoney(inv.commitment, true)}</span>}
                     </div>
                   </div>
                 );
@@ -2455,13 +2522,16 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Committed LPs</span>
-            <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{closedLPs.length} LPs · {fmtMoney(committed, true)}</span>
+            <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{closedInvestments.length} LPs · {fmtMoney(committed, true)}</span>
           </div>
           <div className="card-body">
-            {closedLPs.length === 0
+            {closedInvestments.length === 0
               ? <div className="empty" style={{ padding: "30px" }}><p>No closed LPs yet.</p></div>
-              : closedLPs.map(lp => (
-                <div key={lp.id}
+              : closedInvestments.map(inv => {
+                const contactName = inv.contact?.name || 'Unknown';
+                const contactFirm = inv.contact?.firm || '';
+                return (
+                  <div key={inv.id}
                   style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
                   onClick={() => setSelectedLP(lp)}>
                   <div className="avatar">{initials(lp.name)}</div>
@@ -2544,6 +2614,151 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           onPortal={() => { onPortal(selectedLP); setSelectedLP(null); }}
         />
       )}
+
+      {showAddLP && (
+        <AddLPToFundModal
+          fundName={fundName}
+          contacts={contacts}
+          onClose={() => setShowAddLP(false)}
+          onSave={loadFundData}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Add LP to Fund Modal ──
+function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
+  const [selectedContactId, setSelectedContactId] = useState('');
+  const [form, setForm] = useState({
+    stage: 'outreach',
+    commitment: 0,
+    funded: 0,
+    nav: 0
+  });
+
+  const handleSave = async () => {
+    if (!selectedContactId) {
+      alert('Please select an LP contact');
+      return;
+    }
+
+    try {
+      // Get fund ID
+      const { data: fundData } = await supabase
+        .from('funds')
+        .select('id')
+        .eq('name', fundName)
+        .single();
+
+      if (!fundData) throw new Error('Fund not found');
+
+      // Create investment record
+      const { error } = await supabase
+        .from('lps')
+        .insert([{
+          fund_id: fundData.id,
+          parent_lp_id: selectedContactId,
+          is_contact_record: false,
+          stage: form.stage,
+          commitment: form.commitment,
+          funded: form.funded,
+          nav: form.nav,
+          // Copy contact info for display purposes (denormalized)
+          name: contacts.find(c => c.id === selectedContactId)?.name || '',
+          firm: contacts.find(c => c.id === selectedContactId)?.firm || '',
+          email: contacts.find(c => c.id === selectedContactId)?.email || '',
+          phone: contacts.find(c => c.id === selectedContactId)?.phone || '',
+          partner: contacts.find(c => c.id === selectedContactId)?.partner || ''
+        }]);
+
+      if (error) throw error;
+
+      onSave();
+      onClose();
+    } catch (error) {
+      console.error('Error adding LP to fund:', error);
+      alert('Error adding LP: ' + error.message);
+    }
+  };
+
+  const selectedContact = contacts.find(c => c.id === selectedContactId);
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Add LP to {fundName.replace('Decisive Point ', '')}</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2">
+              <label>Select LP Contact *</label>
+              <select 
+                value={selectedContactId} 
+                onChange={e => setSelectedContactId(e.target.value)}
+                style={{ fontSize: 14 }}
+              >
+                <option value="">Choose from LP Directory...</option>
+                {contacts.map(contact => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name} ({contact.firm})
+                  </option>
+                ))}
+              </select>
+              {selectedContact && (
+                <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
+                  {selectedContact.email} · Partner: {selectedContact.partner}
+                </div>
+              )}
+            </div>
+
+            <div className="field">
+              <label>Stage</label>
+              <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
+                {STAGES.map(s => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="field">
+              <label>Commitment ($)</label>
+              <input
+                type="number"
+                value={form.commitment}
+                onChange={e => setForm({ ...form, commitment: parseFloat(e.target.value) || 0 })}
+                placeholder="5000000"
+              />
+            </div>
+
+            <div className="field">
+              <label>Funded ($)</label>
+              <input
+                type="number"
+                value={form.funded}
+                onChange={e => setForm({ ...form, funded: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+              />
+            </div>
+
+            <div className="field">
+              <label>NAV ($)</label>
+              <input
+                type="number"
+                value={form.nav}
+                onChange={e => setForm({ ...form, nav: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Add to Fund</button>
+        </div>
+      </div>
     </div>
   );
 }
