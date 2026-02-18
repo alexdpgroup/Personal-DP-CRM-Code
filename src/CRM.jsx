@@ -513,21 +513,58 @@ export default function CRM({ session, onLogout }) {
             </div>
           ))}
           <div className="sidebar-divider" />
-          <span className="sidebar-section-label">Funds</span>
-          {fundDefs && fundDefs.map(f => (
-            <div
-              key={f.name}
-              className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
-              style={{ fontSize: 13 }}
-              onClick={() => goFund(f.name)}
-            >
-              <Icon name="fund" size={14} />
-              <span style={{ flex: 1 }}>{f.name.replace("Decisive Point ", "")}</span>
-              {f.status === "raising" && (
-                <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
-              )}
-            </div>
-          ))}
+          
+          {/* Funds Section */}
+          {(() => {
+            const funds = (fundDefs || []).filter(f => f.name.startsWith("Decisive Point Fund")).sort((a, b) => a.name.localeCompare(b.name));
+            const spvs = (fundDefs || []).filter(f => f.name.startsWith("Decisive Point -")).sort((a, b) => a.name.localeCompare(b.name));
+            
+            return (
+              <>
+                {funds.length > 0 && (
+                  <>
+                    <span className="sidebar-section-label">Funds</span>
+                    {funds.map(f => (
+                      <div
+                        key={f.name}
+                        className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
+                        style={{ fontSize: 13 }}
+                        onClick={() => goFund(f.name)}
+                      >
+                        <Icon name="fund" size={14} />
+                        <span style={{ flex: 1 }}>{f.name.replace("Decisive Point Fund ", "Fund ")}</span>
+                        {f.status === "raising" && (
+                          <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+                
+                {spvs.length > 0 && (
+                  <>
+                    <div className="sidebar-divider" style={{ margin: "8px 0" }} />
+                    <span className="sidebar-section-label">SPVs</span>
+                    {spvs.map(f => (
+                      <div
+                        key={f.name}
+                        className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
+                        style={{ fontSize: 13 }}
+                        onClick={() => goFund(f.name)}
+                      >
+                        <Icon name="fund" size={14} />
+                        <span style={{ flex: 1 }}>{f.name.replace("Decisive Point - ", "")}</span>
+                        {f.status === "raising" && (
+                          <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </>
+            );
+          })()}
+          
           <div
             className="sidebar-link"
             style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8, borderLeft: "none" }}
@@ -757,6 +794,17 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
 
   const addContact = async (contactData) => {
     try {
+      // Get any fund ID (required by schema even for contacts)
+      const { data: fundData, error: fundError } = await supabase
+        .from('funds')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (fundError || !fundData) {
+        throw new Error('No funds found. Please create a fund first.');
+      }
+
       const { data, error } = await supabase
         .from('lps')
         .insert([{
@@ -770,7 +818,7 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
           commitment: 0,
           funded: 0,
           nav: 0,
-          fund_id: (await supabase.from('funds').select('id').limit(1).single()).data.id // Dummy fund (required by schema)
+          fund_id: fundData.id // Dummy fund (required by schema)
         }])
         .select()
         .single();
