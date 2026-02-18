@@ -2592,7 +2592,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           <span className="card-title">All LPs — {shortName}</span>
         </div>
         <div className="card-body">
-          {fundLPs.length === 0
+          {investments.length === 0
             ? <div className="empty"><p>No LPs assigned to this fund yet.</p></div>
             : (
               <table>
@@ -2607,25 +2607,27 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {fundLPs.map(lp => {
-                    const s = stageInfo(lp.stage);
+                  {investments.map(inv => {
+                    const s = stageInfo(inv.stage);
+                    const contactName = inv.contact?.name || inv.name || 'Unknown';
+                    const contactFirm = inv.contact?.firm || inv.firm || '';
                     return (
-                      <tr key={lp.id} onClick={() => setSelectedLP(lp)}>
+                      <tr key={inv.id} onClick={() => setSelectedLP(inv)}>
                         <td>
                           <div className="flex-row">
-                            <div className="avatar">{initials(lp.name)}</div>
+                            <div className="avatar">{initials(contactName)}</div>
                             <div>
-                              <div className="td-name">{lp.name}</div>
-                              <div className="td-sub">{lp.firm}</div>
+                              <div className="td-name">{contactName}</div>
+                              <div className="td-sub">{contactFirm}</div>
                             </div>
                           </div>
                         </td>
                         <td><span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span></td>
-                        <td style={{ fontSize: 13 }}>{lp.partner}</td>
-                        <td style={{ fontWeight: 500 }}>{lp.commitment ? fmtMoney(lp.commitment) : "—"}</td>
-                        <td>{lp.funded ? fmtMoney(lp.funded) : "—"}</td>
-                        <td style={{ color: lp.nav > lp.funded ? "var(--green)" : "var(--ink)" }}>
-                          {lp.nav ? fmtMoney(lp.nav) : "—"}
+                        <td style={{ fontSize: 13 }}>{inv.partner || inv.contact?.partner || '—'}</td>
+                        <td style={{ fontWeight: 500 }}>{inv.commitment ? fmtMoney(inv.commitment) : "—"}</td>
+                        <td>{inv.funded ? fmtMoney(inv.funded) : "—"}</td>
+                        <td style={{ color: inv.nav > inv.funded ? "var(--green)" : "var(--ink)" }}>
+                          {inv.nav ? fmtMoney(inv.nav) : "—"}
                         </td>
                       </tr>
                     );
