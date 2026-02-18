@@ -718,22 +718,84 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
   const [filterPartner, setFilterPartner] = useState("all");
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [expandedLP, setExpandedLP] = useState(null); // Track which LP is expanded
+  const [contacts, setContacts] = useState([]);
+  const [investments, setInvestments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Group LP records by unique investor name (they may appear in multiple funds)
-  const investorMap = {};
-  lps.forEach(lp => {
-    const key = lp.name + "__" + lp.firm;
-    if (!investorMap[key]) investorMap[key] = { name: lp.name, firm: lp.firm, records: [] };
-    investorMap[key].records.push(lp);
-  });
+  useEffect(() => {
+    loadLPData();
+  }, []);
 
-  const investors = Object.values(investorMap).filter(inv => {
+  const loadLPData = async () => {
+    try {
+      // Load contact records
+      const { data: contactData, error: contactError } = await supabase
+        .from('lps')
+        .select('*')
+        .eq('is_contact_record', true)
+        .order('name');
+
+      if (contactError) throw contactError;
+
+      // Load all investment records
+      const { data: investmentData, error: investError } = await supabase
+        .from('lps')
+        .select('*, fund:funds(*)')
+        .eq('is_contact_record', false)
+        .not('parent_lp_id', 'is', null);
+
+      if (investError) throw investError;
+
+      setContacts(contactData || []);
+      setInvestments(investmentData || []);
+    } catch (error) {
+      console.error('Error loading LP data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addContact = async (contactData) => {
+    try {
+      const { data, error } = await supabase
+        .from('lps')
+        .insert([{
+          name: contactData.name,
+          firm: contactData.firm,
+          email: contactData.email,
+          phone: contactData.phone || '',
+          partner: contactData.partner,
+          is_contact_record: true,
+          stage: 'contact',
+          commitment: 0,
+          funded: 0,
+          nav: 0,
+          fund_id: (await supabase.from('funds').select('id').limit(1).single()).data.id // Dummy fund (required by schema)
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      await loadLPData(); // Refresh
+      setShowAdd(false);
+    } catch (error) {
+      console.error('Error adding contact:', error);
+      alert('Error adding LP contact: ' + error.message);
+    }
+  };
+
+  // Filter contacts
+  const filteredContacts = contacts.filter(contact => {
     const q = search.toLowerCase();
-    const matchQ = !q || inv.name.toLowerCase().includes(q) || inv.firm.toLowerCase().includes(q);
-    const matchPartner = filterPartner === "all" || inv.records.some(r => r.partner === filterPartner);
+    const matchQ = !q || contact.name.toLowerCase().includes(q) || contact.firm.toLowerCase().includes(q);
+    const matchPartner = filterPartner === "all" || contact.partner === filterPartner;
     return matchQ && matchPartner;
   });
+
+  if (loading) {
+    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading LP directory...</div>;
+  }
 
   return (
     <div>
@@ -747,133 +809,57 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
           {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-          <Icon name="plus" size={14} /> Add LP
+          <Icon name="plus" size={14} /> Add LP Contact
         </button>
       </div>
 
       <div className="card">
         <div className="card-body">
-          {investors.length === 0 ? (
+          {filteredContacts.length === 0 ? (
             <div className="empty">
               <Icon name="users" size={40} />
-              <h3>No LPs found</h3>
-              <p>Try adjusting your search or filters</p>
+              <h3>No LP contacts found</h3>
+              <p>Add your first LP contact to get started</p>
             </div>
           ) : (
             <table>
               <thead>
                 <tr>
-                  <th>Investor</th>
-                  <th>Investments</th>
+                  <th>Contact</th>
+                  <th>Firm</th>
+                  <th>Email</th>
+                  <th>Partner</th>
+                  <th>Funds</th>
                   <th>Total Commitment</th>
-                  <th>Total Funded</th>
-                  <th>Distributions</th>
-                  <th>DPI</th>
-                  <th>TVPI</th>
                 </tr>
               </thead>
               <tbody>
-                {investors.map(inv => {
-                  const totalCommit = inv.records.reduce((s, r) => s + (r.commitment || 0), 0);
-                  const totalFunded = inv.records.reduce((s, r) => s + (r.funded || 0), 0);
-                  const totalNAV    = inv.records.reduce((s, r) => s + (r.nav || 0), 0);
-                  const totalDist   = inv.records.reduce((s, r) => s + (r.distributions || []).reduce((a, d) => a + d.amount, 0), 0);
-                  const dpi  = totalFunded > 0 ? (totalDist / totalFunded).toFixed(2) : "—";
-                  const tvpi = totalFunded > 0 ? ((totalDist + totalNAV) / totalFunded).toFixed(2) : "—";
-                  const funds = [...new Set(inv.records.map(r => r.fund))];
-                  const stageOrder = ["closed","signed","soft","diligence","meeting","outreach"];
-                  const topStage = stageOrder.find(sid => inv.records.some(r => r.stage === sid)) || "outreach";
-                  const s = stageInfo(topStage);
-                  const isExpanded = expandedLP === (inv.name + inv.firm);
-                  const key = inv.name + inv.firm;
+                {filteredContacts.map(contact => {
+                  // Get all investments for this contact
+                  const contactInvestments = investments.filter(inv => inv.parent_lp_id === contact.id);
+                  const totalCommit = contactInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+                  const fundNames = [...new Set(contactInvestments.map(inv => inv.fund?.name || 'Unknown'))];
                   
-                  return [
-                    // Main aggregated row
-                    <tr key={key} onClick={() => setExpandedLP(isExpanded ? null : key)} style={{ cursor: 'pointer', background: isExpanded ? '#faf9f6' : '#fff' }}>
+                  return (
+                    <tr key={contact.id} onClick={() => setSelected(contact)} style={{ cursor: 'pointer' }}>
                       <td>
-                        <div className="flex-row">
-                          <span style={{
-                            display: "inline-block", width: 16, marginRight: 8,
-                            fontSize: 10, color: "var(--gold-dark)",
-                            transition: "transform 0.2s",
-                            transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)"
-                          }}>▶</span>
-                          <div className="avatar">{initials(inv.name)}</div>
-                          <div>
-                            <div className="td-name">{inv.name}</div>
-                            <div className="td-sub">{inv.firm}</div>
-                          </div>
+                        <div className="td-name">{contact.name}</div>
+                      </td>
+                      <td><div className="td-sub">{contact.firm}</div></td>
+                      <td style={{ fontSize: 13 }}>{contact.email}</td>
+                      <td><span className="stat-badge badge-blue">{contact.partner}</span></td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {fundNames.length > 0 ? fundNames.map(fn => (
+                            <span key={fn} className="stat-badge badge-gold" style={{ fontSize: 11 }}>
+                              {fn.replace('Decisive Point ', '')}
+                            </span>
+                          )) : <span style={{ color: 'var(--ink-muted)', fontSize: 12 }}>No investments</span>}
                         </div>
                       </td>
-                      <td>
-                        {/* Compact fund pills */}
-                        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                          {funds.map(f => {
-                            const rec = inv.records.find(r => r.fund === f);
-                            const fs = stageInfo(rec.stage);
-                            const shortF = f.replace("Decisive Point ", "");
-                            return (
-                              <div key={f} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                                <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "1px 6px", fontWeight: 500, whiteSpace: "nowrap" }}>{shortF}</span>
-                                <span className="stat-badge" style={{ background: fs.bg, color: fs.color, fontSize: 10, padding: "1px 5px" }}>{fs.label}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </td>
-                      <td style={{ fontWeight: 500 }}>{totalCommit ? fmtMoney(totalCommit) : "—"}</td>
-                      <td>{totalFunded ? fmtMoney(totalFunded) : "—"}</td>
-                      <td style={{ color: totalDist > 0 ? "var(--green)" : "var(--ink-muted)" }}>
-                        {totalDist > 0 ? fmtMoney(totalDist) : "—"}
-                      </td>
-                      <td>
-                        {dpi !== "—"
-                          ? <span className={`stat-badge ${+dpi >= 1 ? "badge-green" : "badge-gray"}`}>{dpi}x</span>
-                          : <span style={{ color: "var(--ink-muted)" }}>—</span>}
-                      </td>
-                      <td>
-                        {tvpi !== "—"
-                          ? <span className={`stat-badge ${+tvpi >= 1.5 ? "badge-green" : +tvpi >= 1 ? "badge-gold" : "badge-red"}`}>{tvpi}x</span>
-                          : <span style={{ color: "var(--ink-muted)" }}>—</span>}
-                      </td>
-                    </tr>,
-                    
-                    // Expanded detail rows showing each fund
-                    ...(isExpanded ? inv.records.map(rec => {
-                      const recDist = (rec.distributions || []).reduce((a, d) => a + d.amount, 0);
-                      const recDPI = rec.funded > 0 ? (recDist / rec.funded).toFixed(2) : "—";
-                      const recTVPI = rec.funded > 0 ? ((recDist + rec.nav) / rec.funded).toFixed(2) : "—";
-                      const recStage = stageInfo(rec.stage);
-                      return (
-                        <tr key={rec.id} style={{ background: '#fff', borderLeft: '3px solid var(--gold)' }} onClick={(e) => { e.stopPropagation(); setSelected(rec); }}>
-                          <td style={{ paddingLeft: 50 }}>
-                            <span style={{ fontSize: 12, color: 'var(--gold-dark)', fontWeight: 500 }}>{rec.fund.replace("Decisive Point ", "")}</span>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span className="stat-badge" style={{ background: recStage.bg, color: recStage.color, fontSize: 11 }}>{recStage.label}</span>
-                              <span style={{ fontSize: 11, color: 'var(--ink-muted)' }}>{rec.partner}</span>
-                            </div>
-                          </td>
-                          <td style={{ fontSize: 13 }}>{rec.commitment ? fmtMoney(rec.commitment) : "—"}</td>
-                          <td style={{ fontSize: 13 }}>{rec.funded ? fmtMoney(rec.funded) : "—"}</td>
-                          <td style={{ fontSize: 13, color: recDist > 0 ? "var(--green)" : "var(--ink-muted)" }}>
-                            {recDist > 0 ? fmtMoney(recDist) : "—"}
-                          </td>
-                          <td>
-                            {recDPI !== "—"
-                              ? <span className={`stat-badge ${+recDPI >= 1 ? "badge-green" : "badge-gray"}`} style={{ fontSize: 11 }}>{recDPI}x</span>
-                              : <span style={{ color: "var(--ink-muted)" }}>—</span>}
-                          </td>
-                          <td>
-                            {recTVPI !== "—"
-                              ? <span className={`stat-badge ${+recTVPI >= 1.5 ? "badge-green" : +recTVPI >= 1 ? "badge-gold" : "badge-red"}`} style={{ fontSize: 11 }}>{recTVPI}x</span>
-                              : <span style={{ color: "var(--ink-muted)" }}>—</span>}
-                          </td>
-                        </tr>
-                      );
-                    }) : [])
-                  ];
+                      <td style={{ fontWeight: 600 }}>{totalCommit > 0 ? fmtMoney(totalCommit) : '—'}</td>
+                    </tr>
+                  );
                 })}
               </tbody>
             </table>
@@ -881,30 +867,243 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
         </div>
       </div>
 
+      {showAdd && <AddLPContactModal onClose={() => setShowAdd(false)} onSave={addContact} />}
       {selected && (
-        <LPDetailDrawer
-          lp={selected}
+        <LPContactDetailDrawer 
+          contact={selected} 
+          investments={investments.filter(inv => inv.parent_lp_id === selected.id)}
           onClose={() => setSelected(null)}
-          onSave={(updated) => {
-            const newLPs = lps.map(l => l.id === updated.id ? updated : l);
-            saveLPs(newLPs);
-            setSelected(updated);
-          }}
-          onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
-          onPortal={() => { onPortal(selected); setSelected(null); }}
-        />
-      )}
-      {showAdd && (
-        <AddLPDrawer
-          onClose={() => setShowAdd(false)}
-          onSave={(newLP) => { saveLPs([...lps, newLP]); setShowAdd(false); }}
+          onUpdate={loadLPData}
         />
       )}
     </div>
   );
 }
 
-// ── LP Detail Drawer ─────────────────────────────────────────────────────────
+// ── Add LP Contact Modal (Contact info only, no fund/commitment) ──
+function AddLPContactModal({ onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: '',
+    firm: '',
+    email: '',
+    phone: '',
+    partner: PARTNERS[0]
+  });
+
+  const f = k => e => setForm({ ...form, [k]: e.target.value });
+
+  const handleSave = () => {
+    if (!form.name || !form.firm || !form.email) {
+      alert('Please fill in name, firm, and email');
+      return;
+    }
+    onSave(form);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Add LP Contact</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginBottom: 20 }}>
+            Add contact information only. Investments will be added from individual fund pages.
+          </p>
+          <div className="form-grid">
+            <div className="field span2">
+              <label>Name *</label>
+              <input value={form.name} onChange={f('name')} placeholder="John Smith" />
+            </div>
+            <div className="field span2">
+              <label>Firm *</label>
+              <input value={form.firm} onChange={f('firm')} placeholder="Acme Ventures" />
+            </div>
+            <div className="field span2">
+              <label>Email *</label>
+              <input type="email" value={form.email} onChange={f('email')} placeholder="john@acme.com" />
+            </div>
+            <div className="field">
+              <label>Phone</label>
+              <input value={form.phone} onChange={f('phone')} placeholder="(555) 123-4567" />
+            </div>
+            <div className="field">
+              <label>Partner</label>
+              <select value={form.partner} onChange={f('partner')}>
+                {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Add Contact</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LP Contact Detail Drawer (Shows all investments) ──
+function LPContactDetailDrawer({ contact, investments, onClose, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(contact);
+
+  const handleSave = async () => {
+    try {
+      const { error } = await supabase
+        .from('lps')
+        .update({
+          name: form.name,
+          firm: form.firm,
+          email: form.email,
+          phone: form.phone,
+          partner: form.partner
+        })
+        .eq('id', contact.id);
+
+      if (error) throw error;
+
+      setEditing(false);
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      alert('Error updating contact: ' + error.message);
+    }
+  };
+
+  const totalCommit = investments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const totalFunded = investments.reduce((s, inv) => s + (inv.funded || 0), 0);
+  const totalNAV = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer large" onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-title">{contact.name}</div>
+            <div className="drawer-subtitle">{contact.firm}</div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+
+        <div className="drawer-body">
+          {editing ? (
+            <div className="form-grid" style={{ marginBottom: 24 }}>
+              <div className="field span2">
+                <label>Name</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="field span2">
+                <label>Firm</label>
+                <input value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} />
+              </div>
+              <div className="field span2">
+                <label>Email</label>
+                <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Phone</label>
+                <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Partner</label>
+                <select value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })}>
+                  {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>EMAIL</div>
+                  <div style={{ fontSize: 14 }}>{contact.email}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>PHONE</div>
+                  <div style={{ fontSize: 14 }}>{contact.phone || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>PARTNER</div>
+                  <div><span className="stat-badge badge-blue">{contact.partner}</span></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fund Investments</h3>
+            {editing ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline btn-sm" onClick={() => { setEditing(false); setForm(contact); }}>Cancel</button>
+                <button className="btn btn-primary btn-sm" onClick={handleSave}>Save</button>
+              </div>
+            ) : (
+              <button className="btn btn-outline btn-sm" onClick={() => setEditing(true)}>
+                <Icon name="edit" size={14} /> Edit Contact
+              </button>
+            )}
+          </div>
+
+          {investments.length === 0 ? (
+            <div className="empty" style={{ padding: '30px 20px' }}>
+              <p style={{ color: 'var(--ink-muted)' }}>No fund investments yet</p>
+              <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 8 }}>
+                Add this LP to a fund from the fund's page
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL COMMITMENT</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{fmtMoney(totalCommit)}</div>
+                </div>
+                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL FUNDED</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold)' }}>{fmtMoney(totalFunded)}</div>
+                </div>
+                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL NAV</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--green)' }}>{fmtMoney(totalNAV)}</div>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fund</th>
+                    <th>Stage</th>
+                    <th>Commitment</th>
+                    <th>Funded</th>
+                    <th>NAV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {investments.map(inv => {
+                    const s = stageInfo(inv.stage);
+                    return (
+                      <tr key={inv.id}>
+                        <td><span className="stat-badge badge-gold">{inv.fund?.name?.replace('Decisive Point ', '') || 'Unknown'}</span></td>
+                        <td><span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span></td>
+                        <td>{fmtMoney(inv.commitment || 0)}</td>
+                        <td style={{ color: 'var(--gold)' }}>{fmtMoney(inv.funded || 0)}</td>
+                        <td style={{ color: 'var(--green)' }}>{fmtMoney(inv.nav || 0)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
