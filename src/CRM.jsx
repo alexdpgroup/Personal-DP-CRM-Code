@@ -308,12 +308,8 @@ const STAGES = [
 
 const TIERS = ["Strategic", "Institutional", "Family Office", "HNW", "UHNW"];
 const PARTNERS = ["Sarah Chen", "Marcus Webb", "Priya Nair", "James Liu"];
-const FUNDS = ["Decisive Point Fund I", "Decisive Point Fund II", "Decisive Point Fund III (Current)"];
-const FUND_DEFS = [
-  { name: "Decisive Point Fund I",             target: 10000000,  status: "closed",  vintage: 2018 },
-  { name: "Decisive Point Fund II",            target: 50000000,  status: "closed",  vintage: 2021 },
-  { name: "Decisive Point Fund III (Current)", target: 100000000, status: "raising", vintage: 2024 },
-];
+const FUNDS = []; // Cleared - load from database only
+const FUND_DEFS = []; // Cleared - load from database only
 
 const SEED_LPS = []; // Removed seed data - start fresh
 
@@ -396,6 +392,9 @@ export default function CRM({ session, onLogout }) {
 
       if (fundsError) throw fundsError;
 
+      console.log('🔍 Loaded funds from Supabase:', funds);
+      console.log('🔍 Number of funds:', funds?.length);
+
       // Load LPs from Supabase
       const { data: lpsData, error: lpsError } = await supabase
         .from('lps')
@@ -411,6 +410,9 @@ export default function CRM({ session, onLogout }) {
         target: f.target_amount,
         status: f.status
       })) || [];
+
+      console.log('🔍 Transformed funds:', transformedFunds);
+      console.log('🔍 Fund names:', transformedFunds.map(f => f.name));
 
       setFundDefs(transformedFunds.length > 0 ? transformedFunds : FUND_DEFS);
       setLPs(lpsData || []);
@@ -554,6 +556,9 @@ export default function CRM({ session, onLogout }) {
           <header className="topbar">
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
+              <div style={{ fontSize: 11, color: "var(--gold-dark)", background: "var(--gold-light)", padding: "2px 8px", borderRadius: 4, marginRight: 12, fontWeight: 600 }}>
+                v2.18.9pm
+              </div>
               <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
               </div>
@@ -1465,6 +1470,9 @@ function PortfolioPage({ fundDefs }) {
 
   // Get fund names from fundDefs, or fall back to FUNDS constant
   const fundNames = fundDefs?.map(f => f.name) || FUNDS;
+  
+  console.log('🎯 PortfolioPage - fundDefs:', fundDefs);
+  console.log('🎯 PortfolioPage - fundNames:', fundNames);
 
   useEffect(() => {
     loadData("dp_schedule_v1", []).then(data => setSchedule(data));
@@ -2816,7 +2824,6 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             )}
         </div>
       </div>
-      )}
 
       {activeTab === 'portfolio' && (
         <FundPortfolioTab portfolio={portfolio} fundName={fundName} />
