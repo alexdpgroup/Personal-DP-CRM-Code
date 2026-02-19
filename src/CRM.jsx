@@ -2695,6 +2695,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
       </div>
 
       {activeTab === 'lps' && (
+      <>
       <div className="two-col">
         {/* ── Pipeline prospects ── */}
         <div className="card">
@@ -2824,6 +2825,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             )}
         </div>
       </div>
+      </>
       )}
 
       {activeTab === 'portfolio' && (
