@@ -2824,6 +2824,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             )}
         </div>
       </div>
+      )}
 
       {activeTab === 'portfolio' && (
         <FundPortfolioTab portfolio={portfolio} fundName={fundName} />
