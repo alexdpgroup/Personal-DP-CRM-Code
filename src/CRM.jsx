@@ -359,11 +359,20 @@ const Icon = ({ name, size = 16 }) => {
 async function loadData(key, fallback) {
   try {
     const r = await window.storage.get(key);
+    console.log(`📂 Loading ${key}:`, r ? 'Found data' : 'No data, using fallback');
     return r ? JSON.parse(r.value) : fallback;
-  } catch { return fallback; }
+  } catch (error) {
+    console.error(`❌ Error loading ${key}:`, error);
+    return fallback;
+  }
 }
 async function saveData(key, value) {
-  try { await window.storage.set(key, JSON.stringify(value)); } catch {}
+  try {
+    await window.storage.set(key, JSON.stringify(value));
+    console.log(`💾 Saved ${key} successfully`, value.length || Object.keys(value).length, 'items');
+  } catch (error) {
+    console.error(`❌ Error saving ${key}:`, error);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1512,12 +1521,20 @@ function PortfolioPage({ fundDefs }) {
   };
 
   const addFinancing = (compIdx, fin) => {
+    console.log('➕ Adding financing:', fin, 'to company index:', compIdx);
     const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, financings: [...c.financings, { ...fin, id: "f" + Date.now() }] });
+    console.log('📊 Updated schedule:', updated);
     saveSchedule(updated);
     setAddFinancingFor(null);
   };
 
-  const addCompany = (comp) => { saveSchedule([...schedule, { ...comp, financings: [] }]); setShowAddCompany(false); };
+  const addCompany = (comp) => {
+    console.log('➕ Adding company:', comp);
+    const updated = [...schedule, { ...comp, financings: [] }];
+    console.log('📊 Updated schedule:', updated);
+    saveSchedule(updated);
+    setShowAddCompany(false);
+  };
 
   return (
     <div>
