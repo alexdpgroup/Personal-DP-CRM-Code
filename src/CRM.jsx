@@ -583,7 +583,7 @@ export default function CRM({ session, onLogout }) {
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
               <div style={{ fontSize: 11, color: "var(--gold-dark)", background: "var(--gold-light)", padding: "2px 8px", borderRadius: 4, marginRight: 12, fontWeight: 600 }}>
-                v2.20-STORAGE-FIX
+                v2.21-FULL-FEATURES
               </div>
               <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -1510,17 +1510,26 @@ function PortfolioPage({ fundDefs }) {
 
   if (!schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading…</div>;
 
-  // Totals across all - using auto-calculated values
+  // Totals across all - using auto-calculated values with manual overrides
   const totalInvested = schedule.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => s + f.invested, 0);
   }, 0);
   
   const totalValue = schedule.reduce((total, comp) => {
-    const latestRound = comp.financings[comp.financings.length - 1];
-    const syncedFMV = latestRound?.costPerShare || 0;
+    // FMV logic: manual override > most recent by date > last entered
+    let syncedFMV = 0;
+    if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
+      syncedFMV = comp.manualFMV;
+    } else if (comp.financings.length > 0) {
+      const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
+      syncedFMV = sortedByDate[0]?.costPerShare || 0;
+    }
     
     return total + comp.financings.reduce((s, f) => {
-      const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
+      // Handle manual vs auto-calculated shares
+      const shares = f.isManualShares 
+        ? f.shares
+        : (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
@@ -1534,6 +1543,27 @@ function PortfolioPage({ fundDefs }) {
       ...c,
       financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
     });
+    saveSchedule(updated);
+  };
+
+  const deleteFinancing = (compIdx, finIdx) => {
+    if (!confirm('Delete this financing round?')) return;
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+      ...c,
+      financings: c.financings.filter((f, fi) => fi !== finIdx)
+    });
+    saveSchedule(updated);
+  };
+
+  const deleteCompany = (compIdx) => {
+    const company = schedule[compIdx];
+    if (!confirm(`Delete ${company.company} and all its financing rounds?`)) return;
+    const updated = schedule.filter((c, ci) => ci !== compIdx);
+    saveSchedule(updated);
+  };
+
+  const updateCompanyFMV = (compIdx, fmv) => {
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, manualFMV: fmv });
     saveSchedule(updated);
   };
 
@@ -1596,13 +1626,21 @@ function PortfolioPage({ fundDefs }) {
             </thead>
             <tbody>
               {schedule.map((comp, compIdx) => {
-                // Auto-calculate totals using FMV sync logic
-                const latestRound = comp.financings[comp.financings.length - 1];
-                const syncedFMV = latestRound?.costPerShare || 0;
+                // FMV logic: manual override > most recent by date > last entered
+                let syncedFMV = 0;
+                if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
+                  syncedFMV = comp.manualFMV; // Manual override
+                } else if (comp.financings.length > 0) {
+                  // Find most recent round by date
+                  const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
+                  syncedFMV = sortedByDate[0]?.costPerShare || 0;
+                }
                 
                 const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
                 const compValue = comp.financings.reduce((s, f) => {
-                  const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
+                  const shares = f.isManualShares 
+                    ? f.shares
+                    : (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
@@ -1649,25 +1687,48 @@ function PortfolioPage({ fundDefs }) {
                     <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
                     <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right" }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                        <span style={{ color: comp.manualFMV !== undefined ? 'var(--gold-dark)' : 'var(--ink)', fontWeight: comp.manualFMV !== undefined ? 600 : 400 }}>
+                          ${syncedFMV.toFixed(2)}
+                        </span>
+                        <button 
+                          className="btn btn-ghost btn-sm" 
+                          onClick={() => {
+                            const newFMV = prompt(`Set FMV per share for ${comp.company}:`, syncedFMV);
+                            if (newFMV !== null) updateCompanyFMV(compIdx, newFMV === '' ? null : +newFMV);
+                          }}
+                          title="Override FMV per share"
+                          style={{ padding: '2px 4px' }}
+                        >
+                          <Icon name="edit" size={10} />
+                        </button>
+                      </div>
+                    </td>
                     <td style={{ textAlign: "right" }}>
                       <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
-                        <Icon name="plus" size={12} />
-                      </button>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
+                          <Icon name="plus" size={12} />
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => deleteCompany(compIdx)} title="Delete company" style={{ color: 'var(--red)' }}>
+                          <Icon name="close" size={12} />
+                        </button>
+                      </div>
                     </td>
                   </tr>,
 
                   /* ── Financing rows (expanded) ── */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
-                    // Auto-sync FMV: use the cost/share of the most recent round as FMV for all
-                    const latestRound = comp.financings[comp.financings.length - 1];
-                    const displayFMV = latestRound.costPerShare || fin.fmvPerShare || fin.costPerShare;
+                    // Use same FMV logic
+                    const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
                     
-                    // Auto-calculate shares from invested / costPerShare
-                    const calculatedShares = fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares;
+                    // Handle manual vs auto-calculated shares
+                    const calculatedShares = fin.isManualShares 
+                      ? fin.shares  // Use manually entered shares
+                      : (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares);
                     
                     // Auto-calculate current value from shares * FMV
                     const calculatedValue = calculatedShares * displayFMV;
@@ -1760,7 +1821,16 @@ function PortfolioPage({ fundDefs }) {
                         <td style={{ textAlign: "right" }}>
                           <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
                         </td>
-                        <td></td>
+                        <td>
+                          <button 
+                            className="btn btn-ghost btn-sm" 
+                            onClick={() => deleteFinancing(compIdx, finIdx)} 
+                            title="Delete this round"
+                            style={{ color: 'var(--red)', padding: '2px 4px' }}
+                          >
+                            <Icon name="close" size={10} />
+                          </button>
+                        </td>
                       </tr>
                     );
                   }) : [])
@@ -1811,24 +1881,38 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
     date: "", 
     invested: 0, 
     costPerShare: 0,
-    fund: fundNames?.[0] || FUNDS[0] // Default to first fund from fundNames or FUNDS
+    manualShares: 0,
+    fund: fundNames?.[0] || FUNDS[0]
   });
+  const [useManualShares, setUseManualShares] = useState(false);
   
   // Auto-calculate shares when invested or costPerShare changes
   const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
+  const finalShares = useManualShares ? form.manualShares : calculatedShares;
   
   const handleSave = () => {
-    if (!form.date || !form.invested || !form.costPerShare || !form.fund) {
-      alert('Please fill in Date, Investment Amount, Cost per Share, and Fund');
+    if (!form.date || !form.invested || !form.fund) {
+      alert('Please fill in Date, Investment Amount, and Fund');
       return;
     }
     
-    // Save with auto-calculated shares and initial value = invested
+    if (!useManualShares && !form.costPerShare) {
+      alert('Please enter Cost per Share or toggle to manual shares entry');
+      return;
+    }
+    
+    if (useManualShares && !form.manualShares) {
+      alert('Please enter number of shares');
+      return;
+    }
+    
+    // Save with calculated or manual shares
     onSave({
       ...form,
-      shares: calculatedShares,
+      shares: finalShares,
       value: form.invested, // Initial value equals investment
-      fmvPerShare: form.costPerShare // Initial FMV equals cost
+      fmvPerShare: form.costPerShare || 0, // FMV equals cost, or 0 for SAFEs
+      isManualShares: useManualShares // Track if shares were manually entered
     });
   };
   
@@ -1838,7 +1922,7 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
   
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="drawer" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+      <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
         <div className="drawer-header">
           <div>
             <div className="drawer-title">Add Financing Round</div>
@@ -1867,23 +1951,65 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
                 placeholder="1000000"
               />
             </div>
-            <div className="field"><label>Cost per Share ($) *</label>
-              <input 
-                type="number" 
-                step="0.01"
-                value={form.costPerShare} 
-                onChange={e => setForm({...form, costPerShare: +e.target.value})} 
-                placeholder="5.00"
-              />
+            
+            {/* Toggle for manual shares entry */}
+            <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                <input 
+                  type="checkbox" 
+                  checked={useManualShares} 
+                  onChange={e => setUseManualShares(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry (for SAFEs, convertible notes, etc.)</span>
+              </label>
             </div>
-            <div className="field span2" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8 }}>
-              <label style={{ color: 'var(--ink-muted)', marginBottom: 4 }}>Calculated Shares</label>
-              <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--gold-dark)' }}>
-                {calculatedShares.toLocaleString()} shares
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 4 }}>
-                Auto-calculated: Investment ÷ Cost per Share
-              </div>
+            
+            {!useManualShares ? (
+              <>
+                <div className="field"><label>Cost per Share ($) *</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={form.costPerShare} 
+                    onChange={e => setForm({...form, costPerShare: +e.target.value})} 
+                    placeholder="5.00"
+                  />
+                </div>
+                <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
+                    {calculatedShares.toLocaleString()}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="field"><label>Number of Shares *</label>
+                  <input 
+                    type="number" 
+                    value={form.manualShares} 
+                    onChange={e => setForm({...form, manualShares: +e.target.value})} 
+                    placeholder="200000"
+                  />
+                </div>
+                <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={form.costPerShare} 
+                    onChange={e => setForm({...form, costPerShare: +e.target.value})} 
+                    placeholder="0.00"
+                  />
+                </div>
+              </>
+            )}
+            
+            <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
+              <strong>Note:</strong> {useManualShares 
+                ? "Manual shares mode - enter exact share count. Use for unconverted SAFEs, convertible notes, or hardcoded amounts."
+                : "Auto-calculation mode - shares will be calculated from investment amount ÷ cost per share."
+              }
             </div>
           </div>
         </div>
