@@ -358,18 +358,35 @@ const Icon = ({ name, size = 16 }) => {
 // ── Storage helpers ───────────────────────────────────────────────────────────
 async function loadData(key, fallback) {
   try {
-    const r = await window.storage.get(key);
-    console.log(`📂 Loading ${key}:`, r ? 'Found data' : 'No data, using fallback');
-    return r ? JSON.parse(r.value) : fallback;
+    // Try window.storage first (Claude artifacts environment)
+    if (window.storage) {
+      const r = await window.storage.get(key);
+      console.log(`📂 Loading ${key} from window.storage:`, r ? 'Found data' : 'No data, using fallback');
+      return r ? JSON.parse(r.value) : fallback;
+    }
+    
+    // Fallback to localStorage (standard web environment)
+    const data = localStorage.getItem(key);
+    console.log(`📂 Loading ${key} from localStorage:`, data ? 'Found data' : 'No data, using fallback');
+    return data ? JSON.parse(data) : fallback;
   } catch (error) {
     console.error(`❌ Error loading ${key}:`, error);
     return fallback;
   }
 }
+
 async function saveData(key, value) {
   try {
-    await window.storage.set(key, JSON.stringify(value));
-    console.log(`💾 Saved ${key} successfully`, value.length || Object.keys(value).length, 'items');
+    // Try window.storage first (Claude artifacts environment)
+    if (window.storage) {
+      await window.storage.set(key, JSON.stringify(value));
+      console.log(`💾 Saved ${key} to window.storage successfully`, value.length || Object.keys(value).length, 'items');
+      return;
+    }
+    
+    // Fallback to localStorage (standard web environment)
+    localStorage.setItem(key, JSON.stringify(value));
+    console.log(`💾 Saved ${key} to localStorage successfully`, value.length || Object.keys(value).length, 'items');
   } catch (error) {
     console.error(`❌ Error saving ${key}:`, error);
   }
@@ -566,7 +583,7 @@ export default function CRM({ session, onLogout }) {
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
               <div style={{ fontSize: 11, color: "var(--gold-dark)", background: "var(--gold-light)", padding: "2px 8px", borderRadius: 4, marginRight: 12, fontWeight: 600 }}>
-                v2.18.9pm
+                v2.20-STORAGE-FIX
               </div>
               <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -2563,17 +2580,8 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
 
   const loadPortfolio = async () => {
     try {
-      const { data, error } = await window.storage.get('dp_schedule_v1');
-      if (error) {
-        console.error('Portfolio load error:', error);
-        setPortfolio([]);
-      } else if (data?.value) {
-        const allCompanies = JSON.parse(data.value);
-        // Load all companies - filtering by fund happens in FundPortfolioTab
-        setPortfolio(allCompanies);
-      } else {
-        setPortfolio([]);
-      }
+      const allCompanies = await loadData('dp_schedule_v1', []);
+      setPortfolio(allCompanies);
     } catch (error) {
       console.error('Portfolio load error:', error);
       setPortfolio([]);
