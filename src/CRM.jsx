@@ -583,7 +583,7 @@ export default function CRM({ session, onLogout }) {
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
               <div style={{ fontSize: 11, color: "var(--gold-dark)", background: "var(--gold-light)", padding: "2px 8px", borderRadius: 4, marginRight: 12, fontWeight: 600 }}>
-                v2.22-SUPABASE-PORTFOLIO
+                v2.23-COLUMN-FIX
               </div>
               <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -1510,7 +1510,7 @@ function PortfolioPage({ fundDefs }) {
       const { data: companies, error: compError } = await supabase
         .from('portfolio_companies')
         .select('*')
-        .order('company');
+        .order('company_name');
       
       if (compError) throw compError;
 
@@ -1524,7 +1524,8 @@ function PortfolioPage({ fundDefs }) {
 
       // Combine into schedule format
       const schedule = (companies || []).map(comp => ({
-        company: comp.company,
+        company: comp.company_name,
+        companyId: comp.id, // Store the database ID
         sector: comp.sector,
         manualFMV: comp.manual_fmv,
         financings: (financings || [])
@@ -1656,18 +1657,12 @@ function PortfolioPage({ fundDefs }) {
     if (!confirm(`Delete ${company.company} and all its financing rounds?`)) return;
     
     try {
-      // Find company ID by matching company name (we need to add company_id to our data structure)
-      const { data: compData } = await supabase
-        .from('portfolio_companies')
-        .select('id')
-        .eq('company', company.company)
-        .single();
-      
-      if (compData) {
+      // Use the stored database ID
+      if (company.companyId) {
         const { error } = await supabase
           .from('portfolio_companies')
           .delete()
-          .eq('id', compData.id);
+          .eq('id', company.companyId);
         
         if (error) throw error;
       }
@@ -1685,18 +1680,12 @@ function PortfolioPage({ fundDefs }) {
     const company = schedule[compIdx];
     
     try {
-      // Find company in database
-      const { data: compData } = await supabase
-        .from('portfolio_companies')
-        .select('id')
-        .eq('company', company.company)
-        .single();
-      
-      if (compData) {
+      // Use stored database ID
+      if (company.companyId) {
         const { error } = await supabase
           .from('portfolio_companies')
           .update({ manual_fmv: fmv })
-          .eq('id', compData.id);
+          .eq('id', company.companyId);
         
         if (error) throw error;
       }
@@ -1715,20 +1704,13 @@ function PortfolioPage({ fundDefs }) {
     const company = schedule[compIdx];
     
     try {
-      // Find company ID
-      const { data: compData } = await supabase
-        .from('portfolio_companies')
-        .select('id')
-        .eq('company', company.company)
-        .single();
-      
-      if (!compData) throw new Error('Company not found');
+      if (!company.companyId) throw new Error('Company ID not found');
       
       // Insert financing
       const { data: newFin, error } = await supabase
         .from('financings')
         .insert({
-          company_id: compData.id,
+          company_id: company.companyId,
           asset: fin.asset,
           fund: fin.fund,
           date: fin.date,
@@ -1776,7 +1758,7 @@ function PortfolioPage({ fundDefs }) {
       const { data: newComp, error } = await supabase
         .from('portfolio_companies')
         .insert({
-          company: comp.company,
+          company_name: comp.company,
           sector: comp.sector
         })
         .select()
@@ -1786,7 +1768,8 @@ function PortfolioPage({ fundDefs }) {
       
       // Update local state
       const updated = [...schedule, { 
-        company: newComp.company,
+        company: newComp.company_name,
+        companyId: newComp.id,
         sector: newComp.sector,
         manualFMV: null,
         financings: [] 
@@ -2927,7 +2910,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
       const { data: companies, error: compError } = await supabase
         .from('portfolio_companies')
         .select('*')
-        .order('company');
+        .order('company_name');
       
       if (compError) throw compError;
 
@@ -2941,7 +2924,8 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
 
       // Combine into schedule format
       const allCompanies = (companies || []).map(comp => ({
-        company: comp.company,
+        company: comp.company_name,
+        companyId: comp.id,
         sector: comp.sector,
         manualFMV: comp.manual_fmv,
         financings: (financings || [])
@@ -3587,4 +3571,4 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
       </div>
     </div>
   );
-}// Make supabase available globally for components
+}
