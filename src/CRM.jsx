@@ -583,7 +583,7 @@ export default function CRM({ session, onLogout }) {
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
               <div style={{ fontSize: 11, color: "var(--gold-dark)", background: "var(--gold-light)", padding: "2px 8px", borderRadius: 4, marginRight: 12, fontWeight: 600 }}>
-                v2.21-FULL-FEATURES
+                v2.22-SUPABASE-PORTFOLIO
               </div>
               <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
@@ -1501,10 +1501,61 @@ function PortfolioPage({ fundDefs }) {
   console.log('🎯 PortfolioPage - fundNames:', fundNames);
 
   useEffect(() => {
-    loadData("dp_schedule_v1", []).then(data => setSchedule(data));
+    loadPortfolioFromSupabase();
   }, []);
 
-  const saveSchedule = (updated) => { setSchedule(updated); saveData("dp_schedule_v1", updated); };
+  const loadPortfolioFromSupabase = async () => {
+    try {
+      // Load companies
+      const { data: companies, error: compError } = await supabase
+        .from('portfolio_companies')
+        .select('*')
+        .order('company');
+      
+      if (compError) throw compError;
+
+      // Load all financings
+      const { data: financings, error: finError } = await supabase
+        .from('financings')
+        .select('*')
+        .order('date');
+      
+      if (finError) throw finError;
+
+      // Combine into schedule format
+      const schedule = (companies || []).map(comp => ({
+        company: comp.company,
+        sector: comp.sector,
+        manualFMV: comp.manual_fmv,
+        financings: (financings || [])
+          .filter(f => f.company_id === comp.id)
+          .map(f => ({
+            id: f.id,
+            asset: f.asset,
+            fund: f.fund,
+            date: f.date,
+            invested: parseFloat(f.invested),
+            shares: parseInt(f.shares),
+            costPerShare: parseFloat(f.cost_per_share) || 0,
+            fmvPerShare: parseFloat(f.fmv_per_share) || 0,
+            isManualShares: f.is_manual_shares,
+            value: 0 // Calculated on the fly
+          }))
+      }));
+
+      console.log('📂 Loaded portfolio from Supabase:', schedule);
+      setSchedule(schedule);
+    } catch (error) {
+      console.error('❌ Error loading portfolio:', error);
+      setSchedule([]);
+    }
+  };
+
+  const saveSchedule = async (updated) => {
+    setSchedule(updated);
+    // Portfolio is now saved through individual add/update/delete functions
+    // This function kept for compatibility but doesn't save to Supabase
+  };
 
   const toggleExpand = (company) => setExpanded(prev => ({ ...prev, [company]: !prev[company] }));
 
@@ -1538,49 +1589,215 @@ function PortfolioPage({ fundDefs }) {
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
-  const updateFinancing = (compIdx, finIdx, field, val) => {
-    const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-      ...c,
-      financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
-    });
-    saveSchedule(updated);
+  const updateFinancing = async (compIdx, finIdx, field, val) => {
+    const comp = schedule[compIdx];
+    const fin = comp.financings[finIdx];
+    
+    try {
+      // Map field names to database columns
+      const fieldMap = {
+        date: 'date',
+        invested: 'invested',
+        costPerShare: 'cost_per_share',
+        fmvPerShare: 'fmv_per_share',
+        fund: 'fund',
+        asset: 'asset',
+        shares: 'shares'
+      };
+      
+      const dbField = fieldMap[field] || field;
+      const { error } = await supabase
+        .from('financings')
+        .update({ [dbField]: isNaN(+val) ? val : +val })
+        .eq('id', fin.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+        ...c,
+        financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
+      });
+      setSchedule(updated);
+    } catch (error) {
+      console.error('❌ Error updating financing:', error);
+      alert('Error updating financing');
+    }
   };
 
-  const deleteFinancing = (compIdx, finIdx) => {
+  const deleteFinancing = async (compIdx, finIdx) => {
     if (!confirm('Delete this financing round?')) return;
-    const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-      ...c,
-      financings: c.financings.filter((f, fi) => fi !== finIdx)
-    });
-    saveSchedule(updated);
+    
+    const comp = schedule[compIdx];
+    const fin = comp.financings[finIdx];
+    
+    try {
+      const { error } = await supabase
+        .from('financings')
+        .delete()
+        .eq('id', fin.id);
+      
+      if (error) throw error;
+      
+      // Update local state
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+        ...c,
+        financings: c.financings.filter((f, fi) => fi !== finIdx)
+      });
+      setSchedule(updated);
+    } catch (error) {
+      console.error('❌ Error deleting financing:', error);
+      alert('Error deleting financing');
+    }
   };
 
-  const deleteCompany = (compIdx) => {
+  const deleteCompany = async (compIdx) => {
     const company = schedule[compIdx];
     if (!confirm(`Delete ${company.company} and all its financing rounds?`)) return;
-    const updated = schedule.filter((c, ci) => ci !== compIdx);
-    saveSchedule(updated);
+    
+    try {
+      // Find company ID by matching company name (we need to add company_id to our data structure)
+      const { data: compData } = await supabase
+        .from('portfolio_companies')
+        .select('id')
+        .eq('company', company.company)
+        .single();
+      
+      if (compData) {
+        const { error } = await supabase
+          .from('portfolio_companies')
+          .delete()
+          .eq('id', compData.id);
+        
+        if (error) throw error;
+      }
+      
+      // Update local state
+      const updated = schedule.filter((c, ci) => ci !== compIdx);
+      setSchedule(updated);
+    } catch (error) {
+      console.error('❌ Error deleting company:', error);
+      alert('Error deleting company');
+    }
   };
 
-  const updateCompanyFMV = (compIdx, fmv) => {
-    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, manualFMV: fmv });
-    saveSchedule(updated);
+  const updateCompanyFMV = async (compIdx, fmv) => {
+    const company = schedule[compIdx];
+    
+    try {
+      // Find company in database
+      const { data: compData } = await supabase
+        .from('portfolio_companies')
+        .select('id')
+        .eq('company', company.company)
+        .single();
+      
+      if (compData) {
+        const { error } = await supabase
+          .from('portfolio_companies')
+          .update({ manual_fmv: fmv })
+          .eq('id', compData.id);
+        
+        if (error) throw error;
+      }
+      
+      // Update local state
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, manualFMV: fmv });
+      setSchedule(updated);
+    } catch (error) {
+      console.error('❌ Error updating FMV:', error);
+      alert('Error updating FMV');
+    }
   };
 
-  const addFinancing = (compIdx, fin) => {
+  const addFinancing = async (compIdx, fin) => {
     console.log('➕ Adding financing:', fin, 'to company index:', compIdx);
-    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, financings: [...c.financings, { ...fin, id: "f" + Date.now() }] });
-    console.log('📊 Updated schedule:', updated);
-    saveSchedule(updated);
-    setAddFinancingFor(null);
+    const company = schedule[compIdx];
+    
+    try {
+      // Find company ID
+      const { data: compData } = await supabase
+        .from('portfolio_companies')
+        .select('id')
+        .eq('company', company.company)
+        .single();
+      
+      if (!compData) throw new Error('Company not found');
+      
+      // Insert financing
+      const { data: newFin, error } = await supabase
+        .from('financings')
+        .insert({
+          company_id: compData.id,
+          asset: fin.asset,
+          fund: fin.fund,
+          date: fin.date,
+          invested: fin.invested,
+          shares: fin.shares,
+          cost_per_share: fin.costPerShare || 0,
+          fmv_per_share: fin.fmvPerShare || 0,
+          is_manual_shares: fin.isManualShares || false
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Update local state
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { 
+        ...c, 
+        financings: [...c.financings, {
+          id: newFin.id,
+          asset: newFin.asset,
+          fund: newFin.fund,
+          date: newFin.date,
+          invested: parseFloat(newFin.invested),
+          shares: parseInt(newFin.shares),
+          costPerShare: parseFloat(newFin.cost_per_share) || 0,
+          fmvPerShare: parseFloat(newFin.fmv_per_share) || 0,
+          isManualShares: newFin.is_manual_shares,
+          value: 0
+        }] 
+      });
+      console.log('📊 Updated schedule:', updated);
+      setSchedule(updated);
+      setAddFinancingFor(null);
+    } catch (error) {
+      console.error('❌ Error adding financing:', error);
+      alert('Error adding financing: ' + error.message);
+    }
   };
 
-  const addCompany = (comp) => {
+  const addCompany = async (comp) => {
     console.log('➕ Adding company:', comp);
-    const updated = [...schedule, { ...comp, financings: [] }];
-    console.log('📊 Updated schedule:', updated);
-    saveSchedule(updated);
-    setShowAddCompany(false);
+    
+    try {
+      // Insert company
+      const { data: newComp, error } = await supabase
+        .from('portfolio_companies')
+        .insert({
+          company: comp.company,
+          sector: comp.sector
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      // Update local state
+      const updated = [...schedule, { 
+        company: newComp.company,
+        sector: newComp.sector,
+        manualFMV: null,
+        financings: [] 
+      }];
+      console.log('📊 Updated schedule:', updated);
+      setSchedule(updated);
+      setShowAddCompany(false);
+    } catch (error) {
+      console.error('❌ Error adding company:', error);
+      alert('Error adding company: ' + error.message);
+    }
   };
 
   return (
@@ -2706,7 +2923,43 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
 
   const loadPortfolio = async () => {
     try {
-      const allCompanies = await loadData('dp_schedule_v1', []);
+      // Load companies
+      const { data: companies, error: compError } = await supabase
+        .from('portfolio_companies')
+        .select('*')
+        .order('company');
+      
+      if (compError) throw compError;
+
+      // Load all financings
+      const { data: financings, error: finError } = await supabase
+        .from('financings')
+        .select('*')
+        .order('date');
+      
+      if (finError) throw finError;
+
+      // Combine into schedule format
+      const allCompanies = (companies || []).map(comp => ({
+        company: comp.company,
+        sector: comp.sector,
+        manualFMV: comp.manual_fmv,
+        financings: (financings || [])
+          .filter(f => f.company_id === comp.id)
+          .map(f => ({
+            id: f.id,
+            asset: f.asset,
+            fund: f.fund,
+            date: f.date,
+            invested: parseFloat(f.invested),
+            shares: parseInt(f.shares),
+            costPerShare: parseFloat(f.cost_per_share) || 0,
+            fmvPerShare: parseFloat(f.fmv_per_share) || 0,
+            isManualShares: f.is_manual_shares,
+            value: 0
+          }))
+      }));
+      
       setPortfolio(allCompanies);
     } catch (error) {
       console.error('Portfolio load error:', error);
@@ -3334,4 +3587,4 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
       </div>
     </div>
   );
-}
+}// Make supabase available globally for components
