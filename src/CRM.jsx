@@ -1469,17 +1469,62 @@ function PortfolioPage() {
   const [expanded, setExpanded] = useState({});
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [addFinancingFor, setAddFinancingFor] = useState(null);
-  const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
+  const [editingCell, setEditingCell] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData("dp_schedule_v1", SEED_SCHEDULE).then(data => setSchedule(data));
+    loadPortfolioFromSupabase();
   }, []);
 
-  const saveSchedule = (updated) => { setSchedule(updated); saveData("dp_schedule_v1", updated); };
+  const loadPortfolioFromSupabase = async () => {
+    try {
+      // Load portfolio companies with their financings
+      const { data: companies, error: compError } = await supabase
+        .from('portfolio_companies')
+        .select(`
+          *,
+          financings:portfolio_financings(*)
+        `)
+        .order('name');
+
+      if (compError) throw compError;
+
+      // Transform to match expected format
+      const transformedSchedule = companies?.map(comp => ({
+        company: comp.name,
+        sector: comp.sector || 'Technology',
+        fund: comp.fund || 'Decisive Point Fund I',
+        financings: (comp.financings || []).map(fin => ({
+          id: fin.id,
+          asset: fin.asset_type,
+          date: fin.investment_date,
+          shares: fin.shares || 0,
+          invested: fin.invested || 0,
+          value: fin.current_value || 0,
+          costPerShare: parseFloat(fin.cost_per_share) || 0,
+          fmvPerShare: parseFloat(fin.fmv_per_share) || 0
+        }))
+      })) || [];
+
+      setSchedule(transformedSchedule.length > 0 ? transformedSchedule : SEED_SCHEDULE);
+    } catch (error) {
+      console.error('Error loading portfolio:', error);
+      // Fallback to browser storage if Supabase fails
+      const browserData = await loadData("dp_schedule_v1", SEED_SCHEDULE);
+      setSchedule(browserData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveSchedule = async (updated) => {
+    setSchedule(updated);
+    // Note: Individual updates handled by updateFinancing
+  };
 
   const toggleExpand = (company) => setExpanded(prev => ({ ...prev, [company]: !prev[company] }));
 
-  if (!schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading…</div>;
+  if (loading || !schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading portfolio...</div>;
 
   // Totals across all companies
   const totalInvested = schedule.reduce((sum, comp) => {
@@ -1502,21 +1547,116 @@ function PortfolioPage() {
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
-  const updateFinancing = (compIdx, finIdx, field, val) => {
+  const updateFinancing = async (compIdx, finIdx, field, val) => {
+    const company = schedule[compIdx];
+    const financing = company.financings[finIdx];
+    
+    // Update locally
     const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
       ...c,
       financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
     });
-    saveSchedule(updated);
+    setSchedule(updated);
+
+    // Save to Supabase
+    try {
+      const dbField = {
+        'asset': 'asset_type',
+        'date': 'investment_date',
+        'shares': 'shares',
+        'invested': 'invested',
+        'value': 'current_value',
+        'costPerShare': 'cost_per_share',
+        'fmvPerShare': 'fmv_per_share'
+      }[field];
+
+      if (dbField) {
+        await supabase
+          .from('portfolio_financings')
+          .update({ [dbField]: val })
+          .eq('id', financing.id);
+      }
+    } catch (error) {
+      console.error('Error updating financing:', error);
+    }
   };
 
-  const addFinancing = (compIdx, fin) => {
-    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, financings: [...c.financings, { ...fin, id: "f" + Date.now() }] });
-    saveSchedule(updated);
-    setAddFinancingFor(null);
+  const addFinancing = async (compIdx, fin) => {
+    try {
+      // Get company from Supabase
+      const company = schedule[compIdx];
+      const { data: compData } = await supabase
+        .from('portfolio_companies')
+        .select('id')
+        .eq('name', company.company)
+        .single();
+
+      if (!compData) {
+        alert('Company not found in database');
+        return;
+      }
+
+      // Insert financing
+      const { data, error } = await supabase
+        .from('portfolio_financings')
+        .insert([{
+          company_id: compData.id,
+          asset_type: fin.asset,
+          investment_date: fin.date,
+          shares: fin.shares || 0,
+          invested: fin.invested,
+          current_value: fin.value || 0,
+          cost_per_share: fin.costPerShare || 0,
+          fmv_per_share: fin.fmvPerShare || 0
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update local state
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+        ...c,
+        financings: [...c.financings, {
+          id: data.id,
+          asset: fin.asset,
+          date: fin.date,
+          shares: fin.shares || 0,
+          invested: fin.invested,
+          value: fin.value || 0,
+          costPerShare: fin.costPerShare || 0,
+          fmvPerShare: fin.fmvPerShare || 0
+        }]
+      });
+      setSchedule(updated);
+      setAddFinancingFor(null);
+    } catch (error) {
+      console.error('Error adding financing:', error);
+      alert('Error adding financing: ' + error.message);
+    }
   };
 
-  const addCompany = (comp) => { saveSchedule([...schedule, { ...comp, financings: [] }]); setShowAddCompany(false); };
+  const addCompany = async (comp) => {
+    try {
+      const { data, error } = await supabase
+        .from('portfolio_companies')
+        .insert([{
+          name: comp.company,
+          sector: comp.sector,
+          fund: comp.fund
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSchedule([...schedule, { ...comp, financings: [] }]);
+      setShowAddCompany(false);
+    } catch (error) {
+      console.error('Error adding company:', error);
+      alert('Error adding company: ' + error.message);
+    }
+  };
 
   return (
     <div>
