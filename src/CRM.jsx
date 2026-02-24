@@ -1469,194 +1469,40 @@ function PortfolioPage() {
   const [expanded, setExpanded] = useState({});
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [addFinancingFor, setAddFinancingFor] = useState(null);
-  const [editingCell, setEditingCell] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
 
   useEffect(() => {
-    loadPortfolioFromSupabase();
+    loadData("dp_schedule_v1", SEED_SCHEDULE).then(data => setSchedule(data));
   }, []);
 
-  const loadPortfolioFromSupabase = async () => {
-    try {
-      // Load portfolio companies with their financings
-      const { data: companies, error: compError } = await supabase
-        .from('portfolio_companies')
-        .select(`
-          *,
-          financings:portfolio_financings(*)
-        `)
-        .order('name');
-
-      if (compError) throw compError;
-
-      // Transform to match expected format
-      const transformedSchedule = companies?.map(comp => ({
-        company: comp.name,
-        sector: comp.sector || 'Technology',
-        fund: comp.fund || 'Decisive Point Fund I',
-        financings: (comp.financings || []).map(fin => ({
-          id: fin.id,
-          asset: fin.asset_type,
-          date: fin.investment_date,
-          shares: fin.shares || 0,
-          invested: fin.invested || 0,
-          value: fin.current_value || 0,
-          costPerShare: parseFloat(fin.cost_per_share) || 0,
-          fmvPerShare: parseFloat(fin.fmv_per_share) || 0
-        }))
-      })) || [];
-
-      setSchedule(transformedSchedule.length > 0 ? transformedSchedule : SEED_SCHEDULE);
-    } catch (error) {
-      console.error('Error loading portfolio:', error);
-      // Fallback to browser storage if Supabase fails
-      const browserData = await loadData("dp_schedule_v1", SEED_SCHEDULE);
-      setSchedule(browserData);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveSchedule = async (updated) => {
-    setSchedule(updated);
-    // Note: Individual updates handled by updateFinancing
-  };
+  const saveSchedule = (updated) => { setSchedule(updated); saveData("dp_schedule_v1", updated); };
 
   const toggleExpand = (company) => setExpanded(prev => ({ ...prev, [company]: !prev[company] }));
 
-  if (loading || !schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading portfolio...</div>;
+  if (!schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading…</div>;
 
-  // Totals across all companies
-  const totalInvested = schedule.reduce((sum, comp) => {
-    return sum + comp.financings.reduce((s, f) => s + (f.invested || 0), 0);
-  }, 0);
-  
-  const totalValue = schedule.reduce((sum, comp) => {
-    // Get company FMV from latest round
-    const latestRound = comp.financings[comp.financings.length - 1];
-    const companyFMV = latestRound?.costPerShare || latestRound?.fmvPerShare || 0;
-    
-    // Sum: shares * FMV for each financing
-    return sum + comp.financings.reduce((s, f) => {
-      const calculatedShares = f.costPerShare > 0 ? f.invested / f.costPerShare : 0;
-      const shares = f.shares || calculatedShares;
-      return s + (shares * companyFMV);
-    }, 0);
-  }, 0);
-  
+  // Totals across all
+  const allFin = schedule.flatMap(c => c.financings);
+  const totalInvested = allFin.reduce((s, f) => s + f.invested, 0);
+  const totalValue    = allFin.reduce((s, f) => s + f.value, 0);
   const totalGainLoss = totalValue - totalInvested;
-  const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
+  const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
-  const updateFinancing = async (compIdx, finIdx, field, val) => {
-    const company = schedule[compIdx];
-    const financing = company.financings[finIdx];
-    
-    // Update locally
+  const updateFinancing = (compIdx, finIdx, field, val) => {
     const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
       ...c,
       financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
     });
-    setSchedule(updated);
-
-    // Save to Supabase
-    try {
-      const dbField = {
-        'asset': 'asset_type',
-        'date': 'investment_date',
-        'shares': 'shares',
-        'invested': 'invested',
-        'value': 'current_value',
-        'costPerShare': 'cost_per_share',
-        'fmvPerShare': 'fmv_per_share'
-      }[field];
-
-      if (dbField) {
-        await supabase
-          .from('portfolio_financings')
-          .update({ [dbField]: val })
-          .eq('id', financing.id);
-      }
-    } catch (error) {
-      console.error('Error updating financing:', error);
-    }
+    saveSchedule(updated);
   };
 
-  const addFinancing = async (compIdx, fin) => {
-    try {
-      // Get company from Supabase
-      const company = schedule[compIdx];
-      const { data: compData } = await supabase
-        .from('portfolio_companies')
-        .select('id')
-        .eq('name', company.company)
-        .single();
-
-      if (!compData) {
-        alert('Company not found in database');
-        return;
-      }
-
-      // Insert financing
-      const { data, error } = await supabase
-        .from('portfolio_financings')
-        .insert([{
-          company_id: compData.id,
-          asset_type: fin.asset,
-          investment_date: fin.date,
-          shares: fin.shares || 0,
-          invested: fin.invested,
-          current_value: fin.value || 0,
-          cost_per_share: fin.costPerShare || 0,
-          fmv_per_share: fin.fmvPerShare || 0
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Update local state
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-        ...c,
-        financings: [...c.financings, {
-          id: data.id,
-          asset: fin.asset,
-          date: fin.date,
-          shares: fin.shares || 0,
-          invested: fin.invested,
-          value: fin.value || 0,
-          costPerShare: fin.costPerShare || 0,
-          fmvPerShare: fin.fmvPerShare || 0
-        }]
-      });
-      setSchedule(updated);
-      setAddFinancingFor(null);
-    } catch (error) {
-      console.error('Error adding financing:', error);
-      alert('Error adding financing: ' + error.message);
-    }
+  const addFinancing = (compIdx, fin) => {
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, financings: [...c.financings, { ...fin, id: "f" + Date.now() }] });
+    saveSchedule(updated);
+    setAddFinancingFor(null);
   };
 
-  const addCompany = async (comp) => {
-    try {
-      const { data, error } = await supabase
-        .from('portfolio_companies')
-        .insert([{
-          name: comp.company,
-          sector: comp.sector,
-          fund: comp.fund
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      setSchedule([...schedule, { ...comp, financings: [] }]);
-      setShowAddCompany(false);
-    } catch (error) {
-      console.error('Error adding company:', error);
-      alert('Error adding company: ' + error.message);
-    }
-  };
+  const addCompany = (comp) => { saveSchedule([...schedule, { ...comp, financings: [] }]); setShowAddCompany(false); };
 
   return (
     <div>
@@ -1696,24 +1542,12 @@ function PortfolioPage() {
             </thead>
             <tbody>
               {schedule.map((comp, compIdx) => {
-                // Calculate company totals
-                const compShares = comp.financings.reduce((s, f) => s + (f.shares || 0), 0);
-                const compInvested = comp.financings.reduce((s, f) => s + (f.invested || 0), 0);
-                
-                // Get latest round's cost/share as FMV for entire company
-                const latestRound = comp.financings[comp.financings.length - 1];
-                const companyFMV = latestRound?.costPerShare || latestRound?.fmvPerShare || 0;
-                
-                // Calculate company value: sum of (shares * FMV) for each financing
-                const compValue = comp.financings.reduce((s, f) => {
-                  const shares = f.shares || 0;
-                  return s + (shares * companyFMV);
-                }, 0);
-                
-                const compGL = compValue - compInvested;
-                const compMOIC = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
-                const isOpen = expanded[comp.company];
-                const shortFund = comp.fund?.replace("Decisive Point ", "") || "";
+                const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
+                const compValue    = comp.financings.reduce((s, f) => s + f.value, 0);
+                const compGL       = compValue - compInvested;
+                const compMOIC     = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
+                const isOpen       = expanded[comp.company];
+                const shortFund    = comp.fund.replace("Decisive Point ", "");
 
                 return [
                   /* ── Company summary row (accordion header) ── */
@@ -1729,17 +1563,7 @@ function PortfolioPage() {
                           transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
                         }}>▶</span>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            {comp.company}
-                            <button 
-                              className="btn btn-ghost btn-sm" 
-                              onClick={(e) => { e.stopPropagation(); /* TODO: edit company */ }}
-                              style={{ padding: '2px 6px' }}
-                              title="Edit company"
-                            >
-                              <Icon name="edit" size={11} />
-                            </button>
-                          </div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{comp.company}</div>
                           <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
                         </div>
                       </div>
@@ -1747,12 +1571,12 @@ function PortfolioPage() {
                     <td><span className="badge-blue stat-badge">{comp.sector}</span></td>
                     <td><span className="tag" style={{ fontSize: 11 }}>{shortFund}</span></td>
                     <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
-                    <td style={{ textAlign: "right", fontWeight: 600 }}>{compShares > 0 ? compShares.toLocaleString() : '—'}</td>
+                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
                     <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold)" }}>{companyFMV > 0 ? `$${companyFMV.toFixed(2)}` : '—'}</td>
+                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
                     <td style={{ textAlign: "right" }}>
                       <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
                     </td>
@@ -1765,18 +1589,12 @@ function PortfolioPage() {
 
                   /* ── Financing rows (expanded) ── */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
-                    // Use company FMV for all rounds
-                    const fmvPerShare = companyFMV;
+                    const gl = fin.value - fin.invested;
+                    const moic = fin.invested > 0 ? (fin.value / fin.invested).toFixed(2) : "—";
                     
-                    // Auto-calculate shares if not provided: invested / cost_per_share
-                    const calculatedShares = fin.costPerShare > 0 ? fin.invested / fin.costPerShare : 0;
-                    const shares = fin.shares || calculatedShares;
-                    
-                    // Auto-calculate value: shares * fmv_per_share
-                    const value = shares * fmvPerShare;
-                    
-                    const gl = value - fin.invested;
-                    const moic = fin.invested > 0 ? (value / fin.invested).toFixed(2) : "—";
+                    // Auto-sync FMV: use the cost/share of the most recent round as FMV for all
+                    const latestRound = comp.financings[comp.financings.length - 1];
+                    const displayFMV = latestRound.costPerShare || fin.fmvPerShare;
                     
                     const cellKey = (field) => `${compIdx}-${finIdx}-${field}`;
                     const isEditing = (field) => editingCell === cellKey(field);
@@ -1788,7 +1606,7 @@ function PortfolioPage() {
                       isEditing(field)
                         ? <input
                             autoFocus
-                            defaultValue={fin[field]}
+                            defaultValue={field === "fmvPerShare" ? displayFMV : fin[field]}
                             onBlur={e => editCell(field, e.target.value, isNum)}
                             onKeyDown={e => { if (e.key === "Enter") editCell(field, e.target.value, isNum); if (e.key === "Escape") setEditingCell(null); }}
                             style={{ width: "100%", border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 6px", fontSize: 12, textAlign: align, fontFamily: "var(--sans)", background: "#fff", outline: "none" }}
@@ -1803,64 +1621,36 @@ function PortfolioPage() {
                             {isNum && field !== "costPerShare" && field !== "fmvPerShare" && field !== "shares" 
                               ? fmtMoney(fin[field]) 
                               : field === "shares" 
-                                ? (fin[field] || calculatedShares).toLocaleString() 
+                                ? fin[field].toLocaleString() 
                                 : fin[field]}
                           </span>
                     );
-                    
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
-                              {isEditing('asset')
-                                ? <input 
-                                    autoFocus
-                                    defaultValue={fin.asset}
-                                    onBlur={e => editCell('asset', e.target.value, false)}
-                                    onKeyDown={e => { if (e.key === "Enter") editCell('asset', e.target.value, false); if (e.key === "Escape") setEditingCell(null); }}
-                                    style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 11 }}
-                                  />
-                                : fin.asset
-                              }
-                            </span>
-                            <button 
-                              className="btn btn-ghost btn-sm" 
-                              onClick={(e) => { e.stopPropagation(); setEditingCell(cellKey('asset')); }}
-                              style={{ padding: '2px 6px', opacity: 0.6 }}
-                              title="Edit stage"
-                            >
-                              <Icon name="edit" size={10} />
-                            </button>
-                          </div>
+                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
                         </td>
                         <td></td>
                         <td></td>
                         <td style={{ fontSize: 12 }}>
                           {isEditing("date")
                             ? <input autoFocus defaultValue={fin.date} type="date" onBlur={e => editCell("date", e.target.value, false)} style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)" }} />
-                            : <span onClick={() => setEditingCell(cellKey("date"))} style={{ cursor: "text" }} title="Click to edit">{fin.date}</span>
+                            : <span onClick={() => setEditingCell(cellKey("date"))} style={{ cursor: "text" }}>{fin.date}</span>
                           }
                         </td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>
-                          <EditableCell field="shares" />
-                          {!fin.shares && calculatedShares > 0 && <span style={{ fontSize: 10, color: 'var(--ink-muted)', marginLeft: 4 }} title="Auto-calculated from invested / cost per share">(auto)</span>}
-                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12 }}><EditableCell field="shares" /></td>
                         <td style={{ textAlign: "right", fontSize: 12 }}><EditableCell field="invested" /></td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: value >= fin.invested ? "var(--green)" : "var(--red)", fontWeight: 600 }}>
-                          {fmtMoney(value)}
-                          <span style={{ fontSize: 10, color: 'var(--ink-muted)', marginLeft: 4 }} title="Auto-calculated: shares × FMV">(auto)</span>
-                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: fin.value >= fin.invested ? "var(--green)" : "var(--red)" }}><EditableCell field="value" /></td>
                         <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
                           {fin.costPerShare > 0 ? <EditableCell field="costPerShare" /> : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
                         </td>
-                        <td style={{ textAlign: "right", fontSize: 12, fontWeight: 600, color: "var(--gold)" }}>
-                          {fmvPerShare > 0 ? (
-                            <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round - set cost/share to update"}>
-                              ${fmvPerShare.toFixed(2)}
+                        <td style={{ textAlign: "right", fontSize: 12 }}>
+                          {displayFMV > 0 ? (
+                            <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round"}>
+                              {displayFMV.toFixed(2)}
                             </span>
-                          ) : '—'}
+                          ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
@@ -2539,75 +2329,20 @@ function InvestorPortal({ lp, onExit }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
   const [selectedLP, setSelectedLP] = useState(null);
-  const [showAddLP, setShowAddLP] = useState(false);
-  const [investments, setInvestments] = useState([]);
-  const [contacts, setContacts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
   const fd = (fundDefs || FUND_DEFS).find(f => f.name === fundName) || FUND_DEFS[0];
-
-  useEffect(() => {
-    loadFundData();
-  }, [fundName]);
-
-  const loadFundData = async () => {
-    try {
-      // Get fund ID
-      const { data: fundData } = await supabase
-        .from('funds')
-        .select('id')
-        .eq('name', fundName)
-        .single();
-
-      if (!fundData) {
-        setLoading(false);
-        return;
-      }
-
-      // Load investment records for this fund
-      const { data: investmentData, error: invError } = await supabase
-        .from('lps')
-        .select('*, contact:parent_lp_id(*)')
-        .eq('fund_id', fundData.id)
-        .eq('is_contact_record', false)
-        .order('created_at', { ascending: false });
-
-      if (invError) throw invError;
-
-      // Load all contacts for dropdown
-      const { data: contactData, error: contactError } = await supabase
-        .from('lps')
-        .select('*')
-        .eq('is_contact_record', true)
-        .order('name');
-
-      if (contactError) throw contactError;
-
-      setInvestments(investmentData || []);
-      setContacts(contactData || []);
-    } catch (error) {
-      console.error('Error loading fund data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
-  }
-
-  const closedInvestments = investments.filter(inv => inv.stage === "closed");
-  const pipelineInvestments = investments.filter(inv => inv.stage !== "closed");
-  const committed = investments.reduce((s, inv) => s + (inv.commitment || 0), 0);
-  const funded = investments.reduce((s, inv) => s + (inv.funded || 0), 0);
-  const nav = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
+  const fundLPs = lps.filter(l => l.fund === fundName);
+  const closedLPs = fundLPs.filter(l => l.stage === "closed");
+  const pipelineLPs = fundLPs.filter(l => l.stage !== "closed");
+  const committed = fundLPs.reduce((s, l) => s + (l.commitment || 0), 0);
+  const funded = fundLPs.reduce((s, l) => s + (l.funded || 0), 0);
+  const nav = fundLPs.reduce((s, l) => s + (l.nav || 0), 0);
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
   const shortName = fundName.replace("Decisive Point ", "");
 
   // pipeline by stage
   const byStage = STAGES.map(s => ({
-    ...s, lps: investments.filter(inv => inv.stage === s.id),
+    ...s, lps: fundLPs.filter(l => l.stage === s.id),
   }));
 
   return (
@@ -2658,8 +2393,8 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           {[
             { label: "Committed",    val: fmtMoney(committed, true) },
             { label: "Funded",       val: fmtMoney(funded, true) },
-            { label: "Closed LPs",   val: closedInvestments.length },
-            { label: "In Pipeline",  val: pipelineInvestments.length },
+            { label: "Closed LPs",   val: closedLPs.length },
+            { label: "In Pipeline",  val: pipelineLPs.length },
             { label: nav > 0 ? "Portfolio NAV" : "Remaining", val: nav > 0 ? fmtMoney(nav, true) : fmtMoney(Math.max(fd.target - committed, 0), true) },
           ].map(item => (
             <div key={item.label} style={{ background: "var(--surface)", borderRadius: 8, padding: "12px 14px" }}>
@@ -2690,36 +2425,24 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Pipeline Prospects</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{pipelineInvestments.length} active</span>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowAddLP(true)}>
-                <Icon name="plus" size={13} /> Add LP
-              </button>
-            </div>
+            <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{pipelineLPs.length} active</span>
           </div>
           <div className="card-body">
-            {pipelineInvestments.length === 0
-              ? <div className="empty" style={{ padding: "30px" }}>
-                  <p>No pipeline prospects for this fund.</p>
-                  <button className="btn btn-outline btn-sm" style={{ marginTop: 12 }} onClick={() => setShowAddLP(true)}>
-                    <Icon name="plus" size={13} /> Add First LP
-                  </button>
-                </div>
-              : pipelineInvestments.map(inv => {
-                const s = stageInfo(inv.stage);
-                const contactName = inv.contact?.name || 'Unknown';
-                const contactFirm = inv.contact?.firm || '';
+            {pipelineLPs.length === 0
+              ? <div className="empty" style={{ padding: "30px" }}><p>No pipeline prospects for this fund.</p></div>
+              : pipelineLPs.map(lp => {
+                const s = stageInfo(lp.stage);
                 return (
-                  <div key={inv.id} style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
-                    onClick={() => setSelectedLP(inv)}>
-                    <div className="avatar">{initials(contactName)}</div>
+                  <div key={lp.id} style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
+                    onClick={() => setSelectedLP(lp)}>
+                    <div className="avatar">{initials(lp.name)}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{lp.name}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{lp.firm}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <span className="stat-badge" style={{ background: s.bg, color: s.color, display: "block", marginBottom: 3 }}>{s.label}</span>
-                      {inv.commitment > 0 && <span style={{ fontSize: 12, color: "var(--gold-dark)", fontWeight: 600 }}>{fmtMoney(inv.commitment, true)}</span>}
+                      {lp.commitment > 0 && <span style={{ fontSize: 12, color: "var(--gold-dark)", fontWeight: 600 }}>{fmtMoney(lp.commitment, true)}</span>}
                     </div>
                   </div>
                 );
@@ -2732,32 +2455,28 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         <div className="card">
           <div className="card-header">
             <span className="card-title">Committed LPs</span>
-            <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{closedInvestments.length} LPs · {fmtMoney(committed, true)}</span>
+            <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>{closedLPs.length} LPs · {fmtMoney(committed, true)}</span>
           </div>
           <div className="card-body">
-            {closedInvestments.length === 0
+            {closedLPs.length === 0
               ? <div className="empty" style={{ padding: "30px" }}><p>No closed LPs yet.</p></div>
-              : closedInvestments.map(inv => {
-                const contactName = inv.contact?.name || 'Unknown';
-                const contactFirm = inv.contact?.firm || '';
-                return (
-                  <div key={inv.id}
+              : closedLPs.map(lp => (
+                <div key={lp.id}
                   style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
-                  onClick={() => setSelectedLP(inv)}>
-                  <div className="avatar">{initials(contactName)}</div>
+                  onClick={() => setSelectedLP(lp)}>
+                  <div className="avatar">{initials(lp.name)}</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
+                    <div style={{ fontWeight: 500, fontSize: 13.5 }}>{lp.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{lp.firm}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(inv.commitment, true)}</div>
+                    <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(lp.commitment, true)}</div>
                     <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
-                      {inv.funded > 0 ? `${Math.round((inv.funded/inv.commitment)*100)}% funded` : "Not yet called"}
+                      {lp.funded > 0 ? `${Math.round((lp.funded/lp.commitment)*100)}% funded` : "Not yet called"}
                     </div>
                   </div>
                 </div>
-                );
-              })
+              ))
             }
           </div>
         </div>
@@ -2769,7 +2488,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           <span className="card-title">All LPs — {shortName}</span>
         </div>
         <div className="card-body">
-          {investments.length === 0
+          {fundLPs.length === 0
             ? <div className="empty"><p>No LPs assigned to this fund yet.</p></div>
             : (
               <table>
@@ -2784,28 +2503,25 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {investments.map(inv => {
-                    const s = stageInfo(inv.stage);
-                    const contactName = inv.contact?.name || 'Unknown';
-                    const contactFirm = inv.contact?.firm || '';
-                    const contactPartner = inv.contact?.partner || inv.partner || '';
+                  {fundLPs.map(lp => {
+                    const s = stageInfo(lp.stage);
                     return (
-                      <tr key={inv.id} onClick={() => setSelectedLP(inv)}>
+                      <tr key={lp.id} onClick={() => setSelectedLP(lp)}>
                         <td>
                           <div className="flex-row">
-                            <div className="avatar">{initials(contactName)}</div>
+                            <div className="avatar">{initials(lp.name)}</div>
                             <div>
-                              <div className="td-name">{contactName}</div>
-                              <div className="td-sub">{contactFirm}</div>
+                              <div className="td-name">{lp.name}</div>
+                              <div className="td-sub">{lp.firm}</div>
                             </div>
                           </div>
                         </td>
                         <td><span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span></td>
-                        <td style={{ fontSize: 13 }}>{contactPartner}</td>
-                        <td style={{ fontWeight: 500 }}>{inv.commitment ? fmtMoney(inv.commitment) : "—"}</td>
-                        <td>{inv.funded ? fmtMoney(inv.funded) : "—"}</td>
-                        <td style={{ color: inv.nav > inv.funded ? "var(--green)" : "var(--ink)" }}>
-                          {inv.nav ? fmtMoney(inv.nav) : "—"}
+                        <td style={{ fontSize: 13 }}>{lp.partner}</td>
+                        <td style={{ fontWeight: 500 }}>{lp.commitment ? fmtMoney(lp.commitment) : "—"}</td>
+                        <td>{lp.funded ? fmtMoney(lp.funded) : "—"}</td>
+                        <td style={{ color: lp.nav > lp.funded ? "var(--green)" : "var(--ink)" }}>
+                          {lp.nav ? fmtMoney(lp.nav) : "—"}
                         </td>
                       </tr>
                     );
@@ -2828,151 +2544,6 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           onPortal={() => { onPortal(selectedLP); setSelectedLP(null); }}
         />
       )}
-
-      {showAddLP && (
-        <AddLPToFundModal
-          fundName={fundName}
-          contacts={contacts}
-          onClose={() => setShowAddLP(false)}
-          onSave={loadFundData}
-        />
-      )}
-    </div>
-  );
-}
-
-// ── Add LP to Fund Modal ──
-function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
-  const [selectedContactId, setSelectedContactId] = useState('');
-  const [form, setForm] = useState({
-    stage: 'outreach',
-    commitment: 0,
-    funded: 0,
-    nav: 0
-  });
-
-  const handleSave = async () => {
-    if (!selectedContactId) {
-      alert('Please select an LP contact');
-      return;
-    }
-
-    try {
-      // Get fund ID
-      const { data: fundData } = await supabase
-        .from('funds')
-        .select('id')
-        .eq('name', fundName)
-        .single();
-
-      if (!fundData) throw new Error('Fund not found');
-
-      // Create investment record
-      const { error } = await supabase
-        .from('lps')
-        .insert([{
-          fund_id: fundData.id,
-          parent_lp_id: selectedContactId,
-          is_contact_record: false,
-          stage: form.stage,
-          commitment: form.commitment,
-          funded: form.funded,
-          nav: form.nav,
-          // Copy contact info for display purposes (denormalized)
-          name: contacts.find(c => c.id === selectedContactId)?.name || '',
-          firm: contacts.find(c => c.id === selectedContactId)?.firm || '',
-          email: contacts.find(c => c.id === selectedContactId)?.email || '',
-          phone: contacts.find(c => c.id === selectedContactId)?.phone || '',
-          partner: contacts.find(c => c.id === selectedContactId)?.partner || ''
-        }]);
-
-      if (error) throw error;
-
-      onSave();
-      onClose();
-    } catch (error) {
-      console.error('Error adding LP to fund:', error);
-      alert('Error adding LP: ' + error.message);
-    }
-  };
-
-  const selectedContact = contacts.find(c => c.id === selectedContactId);
-
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div className="drawer-title">Add LP to {fundName.replace('Decisive Point ', '')}</div>
-          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
-        </div>
-        <div className="drawer-body">
-          <div className="form-grid">
-            <div className="field span2">
-              <label>Select LP Contact *</label>
-              <select 
-                value={selectedContactId} 
-                onChange={e => setSelectedContactId(e.target.value)}
-                style={{ fontSize: 14 }}
-              >
-                <option value="">Choose from LP Directory...</option>
-                {contacts.map(contact => (
-                  <option key={contact.id} value={contact.id}>
-                    {contact.name} ({contact.firm})
-                  </option>
-                ))}
-              </select>
-              {selectedContact && (
-                <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
-                  {selectedContact.email} · Partner: {selectedContact.partner}
-                </div>
-              )}
-            </div>
-
-            <div className="field">
-              <label>Stage</label>
-              <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
-                {STAGES.map(s => (
-                  <option key={s.id} value={s.id}>{s.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Commitment ($)</label>
-              <input
-                type="number"
-                value={form.commitment}
-                onChange={e => setForm({ ...form, commitment: parseFloat(e.target.value) || 0 })}
-                placeholder="5000000"
-              />
-            </div>
-
-            <div className="field">
-              <label>Funded ($)</label>
-              <input
-                type="number"
-                value={form.funded}
-                onChange={e => setForm({ ...form, funded: parseFloat(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-
-            <div className="field">
-              <label>NAV ($)</label>
-              <input
-                type="number"
-                value={form.nav}
-                onChange={e => setForm({ ...form, nav: parseFloat(e.target.value) || 0 })}
-                placeholder="0"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="drawer-footer">
-          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add to Fund</button>
-        </div>
-      </div>
     </div>
   );
 }
