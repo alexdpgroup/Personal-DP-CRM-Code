@@ -1506,10 +1506,10 @@ function PortfolioPage({ fundDefs }) {
 
   const loadPortfolioFromSupabase = async () => {
     try {
-      // Load companies
+      // Load companies with fund info
       const { data: companies, error: compError } = await supabase
         .from('portfolio_companies')
-        .select('*')
+        .select('*, fund:funds(name)')
         .order('company_name');
       
       if (compError) throw compError;
@@ -1527,13 +1527,14 @@ function PortfolioPage({ fundDefs }) {
         company: comp.company_name,
         companyId: comp.id, // Store the database ID
         sector: comp.sector,
+        fund: comp.fund?.name || '', // Get fund name from relationship
         manualFMV: comp.manual_fmv,
         financings: (financings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
             id: f.id,
             asset: f.asset_type,
-            fund: f.fund,
+            fund: comp.fund?.name || '', // Inherit fund from company
             date: f.investment_date,
             invested: parseFloat(f.invested) || 0,
             shares: parseInt(f.shares) || 0,
@@ -1601,7 +1602,6 @@ function PortfolioPage({ fundDefs }) {
         invested: 'invested',
         costPerShare: 'cost_per_share',
         fmvPerShare: 'fmv_per_share',
-        fund: 'fund',
         asset: 'asset_type',
         shares: 'shares'
       };
@@ -1712,7 +1712,6 @@ function PortfolioPage({ fundDefs }) {
         .insert({
           company_id: company.companyId,
           asset_type: fin.asset,
-          fund: fin.fund,
           investment_date: fin.date,
           invested: fin.invested,
           shares: fin.shares || 0,
