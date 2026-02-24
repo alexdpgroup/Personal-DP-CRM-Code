@@ -1725,13 +1725,13 @@ function PortfolioPage({ fundDefs }) {
       
       if (error) throw error;
       
-      // Update local state
+      // Update local state - inherit fund from company
       const updated = schedule.map((c, ci) => ci !== compIdx ? c : { 
         ...c, 
         financings: [...c.financings, {
           id: newFin.id,
           asset: newFin.asset_type,
-          fund: newFin.fund,
+          fund: company.fund, // Inherit from company, not from financing record
           date: newFin.investment_date,
           invested: parseFloat(newFin.invested) || 0,
           shares: parseInt(newFin.shares) || 0,
