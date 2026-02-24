@@ -1540,7 +1540,6 @@ function PortfolioPage({ fundDefs }) {
             shares: parseInt(f.shares) || 0,
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
-            isManualShares: f.is_manual_shares,
             value: 0 // Calculated on the fly
           }))
       }));
@@ -1717,8 +1716,7 @@ function PortfolioPage({ fundDefs }) {
           shares: fin.shares || 0,
           cost_per_share: fin.costPerShare || 0,
           fmv_per_share: fin.fmvPerShare || 0,
-          current_value: 0,
-          is_manual_shares: fin.isManualShares || false
+          current_value: 0
         })
         .select()
         .single();
@@ -1737,7 +1735,6 @@ function PortfolioPage({ fundDefs }) {
           shares: parseInt(newFin.shares) || 0,
           costPerShare: parseFloat(newFin.cost_per_share) || 0,
           fmvPerShare: parseFloat(newFin.fmv_per_share) || 0,
-          isManualShares: newFin.is_manual_shares,
           value: 0
         }] 
       });
