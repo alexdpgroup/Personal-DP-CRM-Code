@@ -1963,25 +1963,10 @@ function PortfolioPage({ fundDefs }) {
                           <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
                         </td>
                         <td></td>
-                        <td style={{ fontSize: 12 }}>
-                          {isEditing("fund")
-                            ? <select 
-                                autoFocus 
-                                defaultValue={fin.fund || FUNDS[0]} 
-                                onBlur={e => editCell("fund", e.target.value, false)}
-                                onKeyDown={e => { if (e.key === "Enter") editCell("fund", e.target.value, false); if (e.key === "Escape") setEditingCell(null); }}
-                                style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)", width: '100%' }}
-                              >
-                                {fundNames.map(f => <option key={f} value={f}>{f}</option>)}
-                              </select>
-                            : <span 
-                                onClick={() => setEditingCell(cellKey("fund"))} 
-                                style={{ cursor: "pointer", fontSize: 11, color: "var(--ink)" }}
-                                title="Click to change fund"
-                              >
-                                {fin.fund ? fin.fund.replace("Decisive Point ", "") : "Select fund"}
-                              </span>
-                          }
+                        <td style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                          <span style={{ fontSize: 11 }} title="Fund is set at company level">
+                            {fin.fund ? fin.fund.replace("Decisive Point ", "") : "—"}
+                          </span>
                         </td>
                         <td style={{ fontSize: 12 }}>
                           {isEditing("date")
@@ -2072,8 +2057,7 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
     date: "", 
     invested: 0, 
     costPerShare: 0,
-    manualShares: 0,
-    fund: fundNames?.[0] || FUNDS[0]
+    manualShares: 0
   });
   const [useManualShares, setUseManualShares] = useState(false);
   
@@ -2082,8 +2066,8 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
   const finalShares = useManualShares ? form.manualShares : calculatedShares;
   
   const handleSave = () => {
-    if (!form.date || !form.invested || !form.fund) {
-      alert('Please fill in Date, Investment Amount, and Fund');
+    if (!form.date || !form.invested) {
+      alert('Please fill in Date and Investment Amount');
       return;
     }
     
@@ -2108,8 +2092,6 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
   
   const f = k => e => setForm({ ...form, [k]: e.target.value });
   
-  const availableFunds = fundNames || FUNDS;
-  
   return (
     <div className="overlay" onClick={onClose}>
       <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
@@ -2122,14 +2104,9 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
         </div>
         <div className="drawer-body">
           <div className="form-grid">
-            <div className="field"><label>Asset / Round</label>
+            <div className="field span2"><label>Asset / Round</label>
               <select value={form.asset} onChange={f("asset")}>
                 {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
-              </select>
-            </div>
-            <div className="field"><label>Fund / SPV *</label>
-              <select value={form.fund} onChange={f("fund")}>
-                {availableFunds.map(fund => <option key={fund}>{fund}</option>)}
               </select>
             </div>
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
