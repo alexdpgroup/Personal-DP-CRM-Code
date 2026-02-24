@@ -1578,10 +1578,8 @@ function PortfolioPage({ fundDefs }) {
     }
     
     return total + comp.financings.reduce((s, f) => {
-      // Handle manual vs auto-calculated shares
-      const shares = f.isManualShares 
-        ? f.shares
-        : (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares);
+      // Auto-calculate shares if not provided: invested / cost_per_share
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
@@ -1835,9 +1833,7 @@ function PortfolioPage({ fundDefs }) {
                 
                 const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
                 const compValue = comp.financings.reduce((s, f) => {
-                  const shares = f.isManualShares 
-                    ? f.shares
-                    : (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares);
+                  const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
@@ -1922,10 +1918,8 @@ function PortfolioPage({ fundDefs }) {
                     // Use same FMV logic
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
                     
-                    // Handle manual vs auto-calculated shares
-                    const calculatedShares = fin.isManualShares 
-                      ? fin.shares  // Use manually entered shares
-                      : (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares);
+                    // Auto-calculate shares if not provided
+                    const calculatedShares = fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0);
                     
                     // Auto-calculate current value from shares * FMV
                     const calculatedValue = calculatedShares * displayFMV;
@@ -2108,8 +2102,7 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
       ...form,
       shares: finalShares,
       value: form.invested, // Initial value equals investment
-      fmvPerShare: form.costPerShare || 0, // FMV equals cost, or 0 for SAFEs
-      isManualShares: useManualShares // Track if shares were manually entered
+      fmvPerShare: form.costPerShare || 0 // FMV equals cost, or 0 for SAFEs
     });
   };
   
@@ -2936,7 +2929,6 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             shares: parseInt(f.shares),
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
-            isManualShares: f.is_manual_shares,
             value: 0
           }))
       }));
