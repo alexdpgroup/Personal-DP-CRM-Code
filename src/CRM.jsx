@@ -308,12 +308,42 @@ const STAGES = [
 
 const TIERS = ["Strategic", "Institutional", "Family Office", "HNW", "UHNW"];
 const PARTNERS = ["Sarah Chen", "Marcus Webb", "Priya Nair", "James Liu"];
-const FUNDS = []; // Cleared - load from database only
-const FUND_DEFS = []; // Cleared - load from database only
+const FUNDS = ["Decisive Point Fund I", "Decisive Point Fund II", "Decisive Point Fund III (Current)"];
+const FUND_DEFS = [
+  { name: "Decisive Point Fund I",             target: 10000000,  status: "closed",  vintage: 2018 },
+  { name: "Decisive Point Fund II",            target: 50000000,  status: "closed",  vintage: 2021 },
+  { name: "Decisive Point Fund III (Current)", target: 100000000, status: "raising", vintage: 2024 },
+];
 
-const SEED_LPS = []; // Removed seed data - start fresh
+const SEED_LPS = [
+  // ── Fund I (closed, $10M target, fully raised) ──
+  { id: "lp_f1_1", name: "Gerald Whitmore", firm: "Whitmore Family Trust", email: "gw@whitmoretrust.com", phone: "+1 617 555 0011", stage: "closed", tier: "Family Office", partner: "Sarah Chen", commitment: 2500000, funded: 2500000, nav: 5100000, docs: ["Subscription Docs", "K-1 2019", "K-1 2020", "K-1 2021"], fund: "Decisive Point Fund I", notes: [{ date: "2018-03-12", author: "Sarah Chen", text: "Founding LP. Committed at first close. Strong conviction in team." }], distributions: [{ date: "2021-06-01", amount: 300000, type: "Return of Capital" }, { date: "2022-12-01", amount: 500000, type: "Carry Distribution" }] },
+  { id: "lp_f1_2", name: "Sumner Hill Capital", firm: "Sumner Hill Capital Partners", email: "invest@sumnerhill.com", phone: "+1 212 555 0022", stage: "closed", tier: "Institutional", partner: "Marcus Webb", commitment: 4000000, funded: 4000000, nav: 7800000, docs: ["Subscription Docs", "Side Letter", "K-1 2019", "K-1 2020"], fund: "Decisive Point Fund I", notes: [{ date: "2018-04-20", author: "Marcus Webb", text: "Second close. Negotiated MFN clause. Long-term partner prospect." }], distributions: [{ date: "2021-06-01", amount: 480000, type: "Return of Capital" }, { date: "2022-12-01", amount: 800000, type: "Carry Distribution" }] },
+  { id: "lp_f1_3", name: "Lena Vasquez", firm: "Vasquez Holdings LLC", email: "lv@vasquezhold.com", phone: "+1 305 555 0033", stage: "closed", tier: "UHNW", partner: "Priya Nair", commitment: 1500000, funded: 1500000, nav: 2900000, docs: ["Subscription Docs", "K-1 2020"], fund: "Decisive Point Fund I", notes: [{ date: "2018-06-01", author: "Priya Nair", text: "Third close. Final LP in Fund I. Referral from Gerald Whitmore." }], distributions: [{ date: "2022-12-01", amount: 300000, type: "Carry Distribution" }] },
+  { id: "lp_f1_4", name: "Crestwood Advisors", firm: "Crestwood Family Advisors", email: "vc@crestwoodfa.com", phone: "+1 617 555 0044", stage: "closed", tier: "Family Office", partner: "Sarah Chen", commitment: 2000000, funded: 2000000, nav: 3900000, docs: ["Subscription Docs", "K-1 2019", "K-1 2021"], fund: "Decisive Point Fund I", notes: [{ date: "2018-04-05", author: "Sarah Chen", text: "Introduced via Sumner Hill. Quick diligence — 3 week close." }], distributions: [{ date: "2021-06-01", amount: 240000, type: "Return of Capital" }] },
+  // ── Fund II (closed, $50M target, raised $60M — oversubscribed) ──
+  { id: "lp1", name: "Alexandra Thornton", firm: "Thornton Family Office", email: "atl@thorntonfo.com", phone: "+1 212 555 0101", stage: "closed", tier: "Family Office", partner: "Sarah Chen", commitment: 5000000, funded: 5000000, nav: 6200000, docs: ["Subscription Docs", "K-1 2023", "Quarterly Report Q4"], fund: "Decisive Point Fund II", notes: [{ date: "2021-03-15", author: "Sarah Chen", text: "Re-upped from Fund I. Increased check size 2x." }, { date: "2021-05-10", author: "Sarah Chen", text: "Docs signed and wired." }], distributions: [{ date: "2023-12-01", amount: 150000, type: "Income" }, { date: "2024-06-01", amount: 200000, type: "Income" }] },
+  { id: "lp_f2_2", name: "Pacific Grove Endowment", firm: "Pacific Grove University", email: "invest@pacificgrove.edu", phone: "+1 831 555 0112", stage: "closed", tier: "Institutional", partner: "Marcus Webb", commitment: 15000000, funded: 15000000, nav: 19500000, docs: ["Subscription Docs", "Side Letter", "Audited Financials 2022"], fund: "Decisive Point Fund II", notes: [{ date: "2021-02-10", author: "Marcus Webb", text: "New institutional LP. 18-month diligence process. Investment committee approved at first close." }], distributions: [{ date: "2023-06-01", amount: 750000, type: "Income" }] },
+  { id: "lp_f2_3", name: "Tanaka Family Office", firm: "TFO Global Investments", email: "vc@tfoglobal.com", phone: "+81 3 555 0113", stage: "closed", tier: "Family Office", partner: "James Liu", commitment: 8000000, funded: 8000000, nav: 10400000, docs: ["Subscription Docs", "K-1 2022"], fund: "Decisive Point Fund II", notes: [{ date: "2021-04-22", author: "James Liu", text: "Japan-based family office. Strong interest in deep tech. Second close." }], distributions: [] },
+  { id: "lp_f2_4", name: "Meridian Growth Partners", firm: "Meridian Growth Partners LP", email: "gp@meridiangrowth.com", phone: "+1 404 555 0114", stage: "closed", tier: "Institutional", partner: "Marcus Webb", commitment: 10000000, funded: 10000000, nav: 13000000, docs: ["Subscription Docs", "Side Letter", "K-1 2022", "K-1 2023"], fund: "Decisive Point Fund II", notes: [{ date: "2021-06-01", author: "Marcus Webb", text: "Third close. Oversubscription — accommodated additional $5M request from existing LPs." }], distributions: [{ date: "2023-12-01", amount: 500000, type: "Income" }] },
+  { id: "lp_f2_5", name: "Rowan Capital Group", firm: "Rowan Capital Group LLC", email: "invest@rowancapital.com", phone: "+1 312 555 0115", stage: "closed", tier: "HNW", partner: "Priya Nair", commitment: 7000000, funded: 7000000, nav: 9100000, docs: ["Subscription Docs", "K-1 2023"], fund: "Decisive Point Fund II", notes: [{ date: "2021-06-15", author: "Priya Nair", text: "Final LP in Fund II. Helped push to $60M close. Referral from Thornton." }], distributions: [] },
+  { id: "lp_f2_6", name: "Silverbridge Foundation", firm: "Silverbridge Charitable Foundation", email: "invest@silverbridge.org", phone: "+1 617 555 0116", stage: "closed", tier: "Institutional", partner: "Sarah Chen", commitment: 15000000, funded: 15000000, nav: 19500000, docs: ["Subscription Docs", "DDQ", "Audited Financials"], fund: "Decisive Point Fund II", notes: [{ date: "2021-03-01", author: "Sarah Chen", text: "Largest LP in Fund II. Endowment model investor. Committed at first close." }], distributions: [{ date: "2024-03-01", amount: 750000, type: "Income" }] },
+  // ── Fund III (current raise, $100M target) ──
+  { id: "lp2", name: "Bridgewater Endowment", firm: "Bridgewater University", email: "invest@bridgewater.edu", phone: "+1 617 555 0202", stage: "closed", tier: "Institutional", partner: "Marcus Webb", commitment: 20000000, funded: 15000000, nav: 19800000, docs: ["Side Letter", "Subscription Docs", "Audited Financials"], fund: "Decisive Point Fund III (Current)", notes: [{ date: "2024-05-20", author: "Marcus Webb", text: "Investment committee approved. Side letter negotiated with 10% co-invest right. Capital calls on 60-day notice." }], distributions: [] },
+  { id: "lp3", name: "Robert Hargrove", firm: "Hargrove Capital", email: "rh@hargrovcap.com", phone: "+1 310 555 0303", stage: "signed", tier: "UHNW", partner: "Priya Nair", commitment: 3000000, funded: 0, nav: 0, docs: ["Subscription Docs"], fund: "Decisive Point Fund III (Current)", notes: [{ date: "2024-07-02", author: "Priya Nair", text: "Docs signed. First capital call expected Q3 2024." }], distributions: [] },
+  { id: "lp4", name: "Meridian Pension Fund", firm: "Meridian State Pension", email: "vc@meridianpension.org", phone: "+1 404 555 0404", stage: "diligence", tier: "Institutional", partner: "Marcus Webb", commitment: 25000000, funded: 0, nav: 0, docs: ["Pitch Deck", "DDQ"], fund: "Decisive Point Fund III (Current)", notes: [{ date: "2024-07-18", author: "Marcus Webb", text: "IC meeting scheduled for September. Legal review underway. Highly competitive process — 3 other managers." }], distributions: [] },
+  { id: "lp5", name: "Claire Voss", firm: "Voss Ventures", email: "claire@vossv.com", phone: "+1 415 555 0505", stage: "meeting", tier: "HNW", partner: "Sarah Chen", commitment: 0, funded: 0, nav: 0, docs: [], fund: "Decisive Point Fund III (Current)", notes: [{ date: "2024-07-25", author: "Sarah Chen", text: "Intro call went well. Sending materials. Potential $1-2M check." }], distributions: [] },
+  { id: "lp6", name: "Daniel Park", firm: "Pacific Rim Ventures", email: "dpark@prv.asia", phone: "+82 2 555 0606", stage: "outreach", tier: "Strategic", partner: "James Liu", commitment: 0, funded: 0, nav: 0, docs: [], fund: "Decisive Point Fund III (Current)", notes: [], distributions: [] },
+  { id: "lp7", name: "Northstar Foundation", firm: "Northstar Charitable Foundation", email: "invest@northstar.org", phone: "+1 651 555 0707", stage: "soft", tier: "Institutional", partner: "Marcus Webb", commitment: 10000000, funded: 0, nav: 0, docs: ["Pitch Deck", "PPM"], fund: "Decisive Point Fund III (Current)", notes: [{ date: "2024-06-30", author: "Marcus Webb", text: "Board approved in principle. $10M target. Waiting on counsel review." }], distributions: [] },
+];
 
-const PORTFOLIO = []; // Removed seed data - will load from funds
+const PORTFOLIO = [
+  { company: "Aether AI", sector: "AI/ML", invested: 3200000, currentMark: 9600000, moic: 3.0, stage: "Series B", fund: "Decisive Point Fund II" },
+  { company: "Verda Bio", sector: "Biotech", invested: 2100000, currentMark: 4200000, moic: 2.0, stage: "Series A", fund: "Decisive Point Fund II" },
+  { company: "CarbonVault", sector: "Climate Tech", invested: 1800000, currentMark: 3600000, moic: 2.0, stage: "Series A", fund: "Decisive Point Fund III (Current)" },
+  { company: "Nexus Robotics", sector: "Robotics", invested: 2500000, currentMark: 2500000, moic: 1.0, stage: "Seed", fund: "Decisive Point Fund III (Current)" },
+  { company: "Luminary Health", sector: "Digital Health", invested: 1500000, currentMark: 4500000, moic: 3.0, stage: "Series B", fund: "Decisive Point Fund II" },
+];
 
 function fmtMoney(n, short = false) {
   if (!n) return "$0";
@@ -358,38 +388,12 @@ const Icon = ({ name, size = 16 }) => {
 // ── Storage helpers ───────────────────────────────────────────────────────────
 async function loadData(key, fallback) {
   try {
-    // Try window.storage first (Claude artifacts environment)
-    if (window.storage) {
-      const r = await window.storage.get(key);
-      console.log(`📂 Loading ${key} from window.storage:`, r ? 'Found data' : 'No data, using fallback');
-      return r ? JSON.parse(r.value) : fallback;
-    }
-    
-    // Fallback to localStorage (standard web environment)
-    const data = localStorage.getItem(key);
-    console.log(`📂 Loading ${key} from localStorage:`, data ? 'Found data' : 'No data, using fallback');
-    return data ? JSON.parse(data) : fallback;
-  } catch (error) {
-    console.error(`❌ Error loading ${key}:`, error);
-    return fallback;
-  }
+    const r = await window.storage.get(key);
+    return r ? JSON.parse(r.value) : fallback;
+  } catch { return fallback; }
 }
-
 async function saveData(key, value) {
-  try {
-    // Try window.storage first (Claude artifacts environment)
-    if (window.storage) {
-      await window.storage.set(key, JSON.stringify(value));
-      console.log(`💾 Saved ${key} to window.storage successfully`, value.length || Object.keys(value).length, 'items');
-      return;
-    }
-    
-    // Fallback to localStorage (standard web environment)
-    localStorage.setItem(key, JSON.stringify(value));
-    console.log(`💾 Saved ${key} to localStorage successfully`, value.length || Object.keys(value).length, 'items');
-  } catch (error) {
-    console.error(`❌ Error saving ${key}:`, error);
-  }
+  try { await window.storage.set(key, JSON.stringify(value)); } catch {}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -418,9 +422,6 @@ export default function CRM({ session, onLogout }) {
 
       if (fundsError) throw fundsError;
 
-      console.log('🔍 Loaded funds from Supabase:', funds);
-      console.log('🔍 Number of funds:', funds?.length);
-
       // Load LPs from Supabase
       const { data: lpsData, error: lpsError } = await supabase
         .from('lps')
@@ -437,17 +438,14 @@ export default function CRM({ session, onLogout }) {
         status: f.status
       })) || [];
 
-      console.log('🔍 Transformed funds:', transformedFunds);
-      console.log('🔍 Fund names:', transformedFunds.map(f => f.name));
-
       setFundDefs(transformedFunds.length > 0 ? transformedFunds : FUND_DEFS);
-      setLPs(lpsData || []);
+      setLPs(lpsData && lpsData.length > 0 ? lpsData : SEED_LPS);
       setLoading(false);
     } catch (error) {
       console.error('Error loading data:', error);
       // Fallback to seed data if Supabase fails
       setFundDefs(FUND_DEFS);
-      setLPs([]);
+      setLPs(SEED_LPS);
       setLoading(false);
     }
   };
@@ -515,58 +513,21 @@ export default function CRM({ session, onLogout }) {
             </div>
           ))}
           <div className="sidebar-divider" />
-          
-          {/* Funds Section */}
-          {(() => {
-            const funds = (fundDefs || []).filter(f => f?.name?.startsWith("Decisive Point Fund")).sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
-            const spvs = (fundDefs || []).filter(f => f?.name?.startsWith("Decisive Point -")).sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
-            
-            return (
-              <>
-                {funds.length > 0 && (
-                  <>
-                    <span className="sidebar-section-label">Funds</span>
-                    {funds.map(f => (
-                      <div
-                        key={f.name}
-                        className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
-                        style={{ fontSize: 13 }}
-                        onClick={() => goFund(f.name)}
-                      >
-                        <Icon name="fund" size={14} />
-                        <span style={{ flex: 1 }}>{f.name.replace("Decisive Point Fund ", "Fund ")}</span>
-                        {f.status === "raising" && (
-                          <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
-                        )}
-                      </div>
-                    ))}
-                  </>
-                )}
-                
-                {spvs.length > 0 && (
-                  <>
-                    <div className="sidebar-divider" style={{ margin: "8px 0" }} />
-                    <span className="sidebar-section-label">SPVs</span>
-                    {spvs.map(f => (
-                      <div
-                        key={f.name}
-                        className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
-                        style={{ fontSize: 13 }}
-                        onClick={() => goFund(f.name)}
-                      >
-                        <Icon name="fund" size={14} />
-                        <span style={{ flex: 1 }}>{f.name.replace("Decisive Point - ", "")}</span>
-                        {f.status === "raising" && (
-                          <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
-                        )}
-                      </div>
-                    ))}
-                  </>
-                )}
-              </>
-            );
-          })()}
-          
+          <span className="sidebar-section-label">Funds</span>
+          {fundDefs && fundDefs.map(f => (
+            <div
+              key={f.name}
+              className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
+              style={{ fontSize: 13 }}
+              onClick={() => goFund(f.name)}
+            >
+              <Icon name="fund" size={14} />
+              <span style={{ flex: 1 }}>{f.name.replace("Decisive Point ", "")}</span>
+              {f.status === "raising" && (
+                <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
+              )}
+            </div>
+          ))}
           <div
             className="sidebar-link"
             style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8, borderLeft: "none" }}
@@ -582,9 +543,6 @@ export default function CRM({ session, onLogout }) {
           <header className="topbar">
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
-              <div style={{ fontSize: 11, color: "var(--gold-dark)", background: "var(--gold-light)", padding: "2px 8px", borderRadius: 4, marginRight: 12, fontWeight: 600 }}>
-                v2.23-COLUMN-FIX
-              </div>
               <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>
                 {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
               </div>
@@ -602,7 +560,7 @@ export default function CRM({ session, onLogout }) {
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} onFund={goFund} />}
             {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
-            {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
+            {page === "portfolio" && <PortfolioPage />}
             {page === "portal" && <PortalPickerPage lps={lps} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
             {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
@@ -619,12 +577,11 @@ export default function CRM({ session, onLogout }) {
 // ── DASHBOARD PAGE ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function DashboardPage({ lps, fundDefs, onFund }) {
-  const safeLps = lps || [];
-  const closed = safeLps.filter(l => l.stage === "closed");
-  const totalCommit = safeLps.reduce((s, l) => s + (l.commitment || 0), 0);
-  const totalFunded = safeLps.reduce((s, l) => s + (l.funded || 0), 0);
-  const totalNAV = safeLps.reduce((s, l) => s + (l.nav || 0), 0);
-  const pipelineCount = safeLps.filter(l => l.stage !== "closed").length;
+  const closed = lps.filter(l => l.stage === "closed");
+  const totalCommit = lps.reduce((s, l) => s + (l.commitment || 0), 0);
+  const totalFunded = lps.reduce((s, l) => s + (l.funded || 0), 0);
+  const totalNAV = lps.reduce((s, l) => s + (l.nav || 0), 0);
+  const pipelineCount = lps.filter(l => l.stage !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
 
   return (
@@ -641,7 +598,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
           <span className="card-title">Recent Activity</span>
         </div>
         <div className="card-body">
-          {safeLps.filter(l => l.notes?.length > 0).slice(0, 6).map(lp => {
+          {lps.filter(l => l.notes.length > 0).slice(0, 6).map(lp => {
             const last = lp.notes[lp.notes.length - 1];
             const s = stageInfo(lp.stage);
             return (
@@ -671,7 +628,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
         </div>
         <div className="card-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 20 }}>
           {funds.map(fd => {
-            const fundLPs = safeLps.filter(l => l.fund === fd.name);
+            const fundLPs = lps.filter(l => l.fund === fd.name);
             const committed = fundLPs.reduce((s, l) => s + (l.commitment || 0), 0);
             const funded = fundLPs.reduce((s, l) => s + (l.funded || 0), 0);
             const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
@@ -756,26 +713,89 @@ function MiniStat({ label, value }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-// Simple LP Directory - just displays lps, no complex loading
 function LPDirectory({ lps, saveLPs, onPortal }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
-  const [filterFund, setFilterFund] = useState("all");
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [expandedLP, setExpandedLP] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [investments, setInvestments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Get unique funds from lps
-  const funds = [...new Set((lps || []).map(lp => lp.fund))].filter(Boolean);
+  useEffect(() => {
+    loadLPData();
+  }, []);
 
-  // Filter LPs
-  const filteredLPs = (lps || []).filter(lp => {
+  const loadLPData = async () => {
+    try {
+      // Load contact records
+      const { data: contactData, error: contactError } = await supabase
+        .from('lps')
+        .select('*')
+        .eq('is_contact_record', true)
+        .order('name');
+
+      if (contactError) throw contactError;
+
+      // Load all investment records
+      const { data: investmentData, error: investError } = await supabase
+        .from('lps')
+        .select('*, fund:funds(*)')
+        .eq('is_contact_record', false)
+        .not('parent_lp_id', 'is', null);
+
+      if (investError) throw investError;
+
+      setContacts(contactData || []);
+      setInvestments(investmentData || []);
+    } catch (error) {
+      console.error('Error loading LP data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addContact = async (contactData) => {
+    try {
+      const { data, error } = await supabase
+        .from('lps')
+        .insert([{
+          name: contactData.name,
+          firm: contactData.firm,
+          email: contactData.email,
+          phone: contactData.phone || '',
+          partner: contactData.partner,
+          is_contact_record: true,
+          stage: 'contact',
+          commitment: 0,
+          funded: 0,
+          nav: 0,
+          fund_id: (await supabase.from('funds').select('id').limit(1).single()).data.id // Dummy fund (required by schema)
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      await loadLPData(); // Refresh
+      setShowAdd(false);
+    } catch (error) {
+      console.error('Error adding contact:', error);
+      alert('Error adding LP contact: ' + error.message);
+    }
+  };
+
+  // Filter contacts
+  const filteredContacts = contacts.filter(contact => {
     const q = search.toLowerCase();
-    const matchQ = !q || lp.name?.toLowerCase().includes(q) || lp.firm?.toLowerCase().includes(q);
-    const matchPartner = filterPartner === "all" || lp.partner === filterPartner;
-    const matchFund = filterFund === "all" || lp.fund === filterFund;
-    return matchQ && matchPartner && matchFund;
+    const matchQ = !q || contact.name.toLowerCase().includes(q) || contact.firm.toLowerCase().includes(q);
+    const matchPartner = filterPartner === "all" || contact.partner === filterPartner;
+    return matchQ && matchPartner;
   });
+
+  if (loading) {
+    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading LP directory...</div>;
+  }
 
   return (
     <div>
@@ -784,63 +804,60 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
           <Icon name="search" size={14} />
           <input className="search-input" placeholder="Search LP name or firm…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select className="filter-select" value={filterFund} onChange={e => setFilterFund(e.target.value)}>
-          <option value="all">All Funds</option>
-          {funds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
-        </select>
         <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
           <option value="all">All Partners</option>
           {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-          <Icon name="plus" size={14} /> Add LP
+          <Icon name="plus" size={14} /> Add LP Contact
         </button>
       </div>
 
       <div className="card">
         <div className="card-body">
-          {filteredLPs.length === 0 ? (
+          {filteredContacts.length === 0 ? (
             <div className="empty">
               <Icon name="users" size={40} />
-              <h3>No LPs found</h3>
-              <p>Add your first LP to get started</p>
+              <h3>No LP contacts found</h3>
+              <p>Add your first LP contact to get started</p>
             </div>
           ) : (
             <table>
               <thead>
                 <tr>
-                  <th>Investor</th>
-                  <th>Fund</th>
-                  <th>Stage</th>
+                  <th>Contact</th>
+                  <th>Firm</th>
+                  <th>Email</th>
                   <th>Partner</th>
-                  <th>Commitment</th>
-                  <th>Funded</th>
-                  <th>NAV</th>
+                  <th>Funds</th>
+                  <th>Total Commitment</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLPs.map(lp => {
-                  const s = stageInfo(lp.stage);
+                {filteredContacts.map(contact => {
+                  // Get all investments for this contact
+                  const contactInvestments = investments.filter(inv => inv.parent_lp_id === contact.id);
+                  const totalCommit = contactInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+                  const fundNames = [...new Set(contactInvestments.map(inv => inv.fund?.name || 'Unknown'))];
+                  
                   return (
-                    <tr key={lp.id} onClick={() => setSelected(lp)} style={{ cursor: 'pointer' }}>
+                    <tr key={contact.id} onClick={() => setSelected(contact)} style={{ cursor: 'pointer' }}>
                       <td>
-                        <div className="td-name">{lp.name}</div>
-                        <div className="td-sub">{lp.firm}</div>
+                        <div className="td-name">{contact.name}</div>
                       </td>
+                      <td><div className="td-sub">{contact.firm}</div></td>
+                      <td style={{ fontSize: 13 }}>{contact.email}</td>
+                      <td><span className="stat-badge badge-blue">{contact.partner}</span></td>
                       <td>
-                        <span className="stat-badge badge-gold">
-                          {lp.fund?.replace('Decisive Point ', '') || '—'}
-                        </span>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {fundNames.length > 0 ? fundNames.map(fn => (
+                            <span key={fn} className="stat-badge badge-gold" style={{ fontSize: 11 }}>
+                              {fn.replace('Decisive Point ', '')}
+                            </span>
+                          )) : <span style={{ color: 'var(--ink-muted)', fontSize: 12 }}>No investments</span>}
+                        </div>
                       </td>
-                      <td>
-                        <span className="stat-badge" style={{ background: s.bg, color: s.color }}>
-                          {s.label}
-                        </span>
-                      </td>
-                      <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
-                      <td style={{ fontWeight: 500 }}>{lp.commitment ? fmtMoney(lp.commitment) : "—"}</td>
-                      <td style={{ color: 'var(--gold)' }}>{lp.funded ? fmtMoney(lp.funded) : "—"}</td>
-                      <td style={{ color: 'var(--green)' }}>{lp.nav ? fmtMoney(lp.nav) : "—"}</td>
+                      <td style={{ fontWeight: 600 }}>{totalCommit > 0 ? fmtMoney(totalCommit) : '—'}</td>
                     </tr>
                   );
                 })}
@@ -850,16 +867,239 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
         </div>
       </div>
 
-      {showAdd && <AddLPDrawer onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, newLP]); setShowAdd(false); }} />}
+      {showAdd && <AddLPContactModal onClose={() => setShowAdd(false)} onSave={addContact} />}
       {selected && (
-        <LPDetailDrawer
-          lp={selected}
+        <LPContactDetailDrawer 
+          contact={selected} 
+          investments={investments.filter(inv => inv.parent_lp_id === selected.id)}
           onClose={() => setSelected(null)}
-          onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
-          onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
-          onPortal={() => { onPortal(selected); setSelected(null); }}
+          onUpdate={loadLPData}
         />
       )}
+    </div>
+  );
+}
+
+// ── Add LP Contact Modal (Contact info only, no fund/commitment) ──
+function AddLPContactModal({ onClose, onSave }) {
+  const [form, setForm] = useState({
+    name: '',
+    firm: '',
+    email: '',
+    phone: '',
+    partner: PARTNERS[0]
+  });
+
+  const f = k => e => setForm({ ...form, [k]: e.target.value });
+
+  const handleSave = () => {
+    if (!form.name || !form.firm || !form.email) {
+      alert('Please fill in name, firm, and email');
+      return;
+    }
+    onSave(form);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Add LP Contact</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginBottom: 20 }}>
+            Add contact information only. Investments will be added from individual fund pages.
+          </p>
+          <div className="form-grid">
+            <div className="field span2">
+              <label>Name *</label>
+              <input value={form.name} onChange={f('name')} placeholder="John Smith" />
+            </div>
+            <div className="field span2">
+              <label>Firm *</label>
+              <input value={form.firm} onChange={f('firm')} placeholder="Acme Ventures" />
+            </div>
+            <div className="field span2">
+              <label>Email *</label>
+              <input type="email" value={form.email} onChange={f('email')} placeholder="john@acme.com" />
+            </div>
+            <div className="field">
+              <label>Phone</label>
+              <input value={form.phone} onChange={f('phone')} placeholder="(555) 123-4567" />
+            </div>
+            <div className="field">
+              <label>Partner</label>
+              <select value={form.partner} onChange={f('partner')}>
+                {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Add Contact</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── LP Contact Detail Drawer (Shows all investments) ──
+function LPContactDetailDrawer({ contact, investments, onClose, onUpdate }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState(contact);
+
+  const handleSave = async () => {
+    try {
+      const { error } = await supabase
+        .from('lps')
+        .update({
+          name: form.name,
+          firm: form.firm,
+          email: form.email,
+          phone: form.phone,
+          partner: form.partner
+        })
+        .eq('id', contact.id);
+
+      if (error) throw error;
+
+      setEditing(false);
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating contact:', error);
+      alert('Error updating contact: ' + error.message);
+    }
+  };
+
+  const totalCommit = investments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const totalFunded = investments.reduce((s, inv) => s + (inv.funded || 0), 0);
+  const totalNAV = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer large" onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-title">{contact.name}</div>
+            <div className="drawer-subtitle">{contact.firm}</div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+
+        <div className="drawer-body">
+          {editing ? (
+            <div className="form-grid" style={{ marginBottom: 24 }}>
+              <div className="field span2">
+                <label>Name</label>
+                <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="field span2">
+                <label>Firm</label>
+                <input value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} />
+              </div>
+              <div className="field span2">
+                <label>Email</label>
+                <input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Phone</label>
+                <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div className="field">
+                <label>Partner</label>
+                <select value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })}>
+                  {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>EMAIL</div>
+                  <div style={{ fontSize: 14 }}>{contact.email}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>PHONE</div>
+                  <div style={{ fontSize: 14 }}>{contact.phone || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>PARTNER</div>
+                  <div><span className="stat-badge badge-blue">{contact.partner}</span></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fund Investments</h3>
+            {editing ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline btn-sm" onClick={() => { setEditing(false); setForm(contact); }}>Cancel</button>
+                <button className="btn btn-primary btn-sm" onClick={handleSave}>Save</button>
+              </div>
+            ) : (
+              <button className="btn btn-outline btn-sm" onClick={() => setEditing(true)}>
+                <Icon name="edit" size={14} /> Edit Contact
+              </button>
+            )}
+          </div>
+
+          {investments.length === 0 ? (
+            <div className="empty" style={{ padding: '30px 20px' }}>
+              <p style={{ color: 'var(--ink-muted)' }}>No fund investments yet</p>
+              <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 8 }}>
+                Add this LP to a fund from the fund's page
+              </p>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL COMMITMENT</div>
+                  <div style={{ fontSize: 18, fontWeight: 600 }}>{fmtMoney(totalCommit)}</div>
+                </div>
+                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL FUNDED</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold)' }}>{fmtMoney(totalFunded)}</div>
+                </div>
+                <div style={{ background: 'var(--surface)', padding: '12px 16px', borderRadius: 8 }}>
+                  <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 4 }}>TOTAL NAV</div>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--green)' }}>{fmtMoney(totalNAV)}</div>
+                </div>
+              </div>
+
+              <table>
+                <thead>
+                  <tr>
+                    <th>Fund</th>
+                    <th>Stage</th>
+                    <th>Commitment</th>
+                    <th>Funded</th>
+                    <th>NAV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {investments.map(inv => {
+                    const s = stageInfo(inv.stage);
+                    return (
+                      <tr key={inv.id}>
+                        <td><span className="stat-badge badge-gold">{inv.fund?.name?.replace('Decisive Point ', '') || 'Unknown'}</span></td>
+                        <td><span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span></td>
+                        <td>{fmtMoney(inv.commitment || 0)}</td>
+                        <td style={{ color: 'var(--gold)' }}>{fmtMoney(inv.funded || 0)}</td>
+                        <td style={{ color: 'var(--green)' }}>{fmtMoney(inv.nav || 0)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -869,47 +1109,7 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(lp);
   const [newNote, setNewNote] = useState("");
-  const [additionalContacts, setAdditionalContacts] = useState([]);
-  const [showAddContact, setShowAddContact] = useState(false);
   const s = stageInfo(lp.stage);
-
-  useEffect(() => {
-    if (tab === "contacts") {
-      loadAdditionalContacts();
-    }
-  }, [tab, lp.id]);
-
-  const loadAdditionalContacts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('lp_additional_contacts')
-        .select('*')
-        .eq('lp_id', lp.id)
-        .order('created_at');
-
-      if (error) throw error;
-      setAdditionalContacts(data || []);
-    } catch (error) {
-      console.error('Error loading contacts:', error);
-    }
-  };
-
-  const deleteAdditionalContact = async (contactId) => {
-    if (!confirm('Remove this contact?')) return;
-    
-    try {
-      const { error } = await supabase
-        .from('lp_additional_contacts')
-        .delete()
-        .eq('id', contactId);
-
-      if (error) throw error;
-      loadAdditionalContacts();
-    } catch (error) {
-      console.error('Error deleting contact:', error);
-      alert('Error: ' + error.message);
-    }
-  };
 
   const addNote = () => {
     if (!newNote.trim()) return;
@@ -947,7 +1147,7 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", padding: "0 26px" }}>
-          {["overview", "contacts", "notes", "docs"].map(t => (
+          {["overview", "notes", "docs"].map(t => (
             <div
               key={t}
               onClick={() => setTab(t)}
@@ -957,7 +1157,7 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                 color: tab === t ? "var(--ink)" : "var(--ink-muted)",
                 textTransform: "capitalize",
               }}
-            >{t === "contacts" ? `Contacts (${additionalContacts.length + 1})` : t}</div>
+            >{t}</div>
           ))}
         </div>
 
@@ -1053,53 +1253,6 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
             </div>
           )}
 
-          {tab === "contacts" && (
-            <div>
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Primary Contact
-                </div>
-                <div style={{ background: 'var(--gold-light)', padding: '16px', borderRadius: 8, border: '1px solid var(--gold)' }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{lp.name}</div>
-                  <div style={{ fontSize: 13, color: 'var(--ink-muted)', marginBottom: 2 }}>{lp.email}</div>
-                  {lp.phone && <div style={{ fontSize: 13, color: 'var(--ink-muted)' }}>{lp.phone}</div>}
-                  <div style={{ fontSize: 11, color: 'var(--gold-dark)', marginTop: 8 }}>Primary · {lp.firm}</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ fontSize: 11, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Additional Contacts
-                </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setShowAddContact(true)}>
-                  <Icon name="plus" size={13} /> Add Contact
-                </button>
-              </div>
-
-              {additionalContacts.length === 0 ? (
-                <div className="empty" style={{ padding: '30px 20px' }}>
-                  <p style={{ color: 'var(--ink-muted)', fontSize: 13 }}>No additional contacts</p>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {additionalContacts.map(contact => (
-                    <div key={contact.id} style={{ background: 'var(--surface)', padding: '14px 16px', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                      <div>
-                        <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 2 }}>{contact.name}</div>
-                        {contact.email && <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{contact.email}</div>}
-                        {contact.phone && <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{contact.phone}</div>}
-                        {contact.role && <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 4 }}>{contact.role}</div>}
-                      </div>
-                      <button className="btn btn-ghost btn-sm" onClick={() => deleteAdditionalContact(contact.id)} title="Remove">
-                        <Icon name="close" size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {tab === "notes" && (
             <div>
               <div className="notes-list">
@@ -1146,79 +1299,6 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
           {editing && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>Cancel</button>}
           {editing && <button className="btn btn-primary btn-sm" onClick={handleSave}>Save Changes</button>}
         </div>
-
-        {showAddContact && (
-          <AddContactModal 
-            lpId={lp.id} 
-            onClose={() => setShowAddContact(false)}
-            onSave={() => { setShowAddContact(false); loadAdditionalContacts(); }}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Add Contact Modal ──
-function AddContactModal({ lpId, onClose, onSave }) {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', role: '' });
-
-  const handleSave = async () => {
-    if (!form.name) {
-      alert('Please enter a name');
-      return;
-    }
-
-    try {
-      const { error } = await supabase
-        .from('lp_additional_contacts')
-        .insert([{
-          lp_id: lpId,
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          role: form.role
-        }]);
-
-      if (error) throw error;
-      onSave();
-    } catch (error) {
-      console.error('Error adding contact:', error);
-      alert('Error: ' + error.message);
-    }
-  };
-
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="drawer" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div className="drawer-title">Add Contact</div>
-          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
-        </div>
-        <div className="drawer-body">
-          <div className="form-grid">
-            <div className="field span2">
-              <label>Name *</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Laura Barnett" />
-            </div>
-            <div className="field span2">
-              <label>Email</label>
-              <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="laura@example.com" />
-            </div>
-            <div className="field">
-              <label>Phone</label>
-              <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(555) 123-4567" />
-            </div>
-            <div className="field">
-              <label>Role</label>
-              <input value={form.role} onChange={e => setForm({ ...form, role: e.target.value })} placeholder="Operations" />
-            </div>
-          </div>
-        </div>
-        <div className="drawer-footer">
-          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add Contact</button>
-        </div>
       </div>
     </div>
   );
@@ -1227,90 +1307,15 @@ function AddContactModal({ lpId, onClose, onSave }) {
 // ── Add LP Drawer ─────────────────────────────────────────────────────────────
 function AddLPDrawer({ onClose, onSave }) {
   const [form, setForm] = useState({
-    name: "", // Primary contact name
-    firm: "",
-    email: "",
-    phone: "",
-    additionalContacts: []
+    name: "", firm: "", email: "", phone: "",
+    stage: "outreach", tier: "HNW", partner: PARTNERS[0],
+    commitment: 0, funded: 0, nav: 0,
+    fund: FUNDS[2], notes: [], docs: [], distributions: []
   });
 
-  const [showAddContact, setShowAddContact] = useState(false);
-
-  const addAdditionalContact = () => {
-    if (form.additionalContacts.length >= 3) {
-      alert('Maximum 3 additional contacts');
-      return;
-    }
-    setShowAddContact(true);
-  };
-
-  const saveAdditionalContact = (contact) => {
-    setForm({
-      ...form,
-      additionalContacts: [...form.additionalContacts, contact]
-    });
-    setShowAddContact(false);
-  };
-
-  const removeContact = (index) => {
-    setForm({
-      ...form,
-      additionalContacts: form.additionalContacts.filter((_, i) => i !== index)
-    });
-  };
-
-  const save = async () => {
-    if (!form.name.trim() || !form.firm.trim()) {
-      alert('Please enter LP/Firm name and Primary Contact');
-      return;
-    }
-
-    try {
-      // Create LP record in Supabase
-      const { data: lp, error: lpError } = await supabase
-        .from('lps')
-        .insert([{
-          name: form.name, // Primary contact name
-          firm: form.firm,
-          email: form.email,
-          phone: form.phone,
-          stage: 'outreach',
-          partner: PARTNERS[0],
-          commitment: 0,
-          funded: 0,
-          nav: 0,
-          fund: null, // Will be assigned from fund pages
-          notes: [],
-          docs: [],
-          distributions: []
-        }])
-        .select()
-        .single();
-
-      if (lpError) throw lpError;
-
-      // Add additional contacts
-      if (form.additionalContacts.length > 0) {
-        const contactsToInsert = form.additionalContacts.map(c => ({
-          lp_id: lp.id,
-          name: c.name,
-          email: c.email,
-          phone: c.phone,
-          role: c.role
-        }));
-
-        const { error: contactsError } = await supabase
-          .from('lp_additional_contacts')
-          .insert(contactsToInsert);
-
-        if (contactsError) throw contactsError;
-      }
-
-      onSave(lp);
-    } catch (error) {
-      console.error('Error adding LP:', error);
-      alert('Error adding LP: ' + error.message);
-    }
+  const save = () => {
+    if (!form.name.trim()) return;
+    onSave({ ...form, id: "lp" + Date.now() });
   };
 
   const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -1324,94 +1329,30 @@ function AddLPDrawer({ onClose, onSave }) {
         </div>
         <div className="drawer-body">
           <div className="form-grid">
-            <div className="field span2"><label>LP / Firm Name *</label><input value={form.firm} onChange={f("firm")} placeholder="Trophy Point Partners" /></div>
-            <div className="field span2"><label>Primary Contact Name *</label><input value={form.name} onChange={f("name")} placeholder="Thomas Hendrix" /></div>
-            <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="thomas@trophypoint.com" /></div>
-            <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
-          </div>
-
-          {/* Additional Contacts */}
-          <div style={{ marginTop: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 600, margin: 0 }}>Additional Contacts ({form.additionalContacts.length}/3)</h4>
-              {form.additionalContacts.length < 3 && (
-                <button className="btn btn-outline btn-sm" onClick={addAdditionalContact}>
-                  <Icon name="plus" size={12} /> Add Contact
-                </button>
-              )}
+            <div className="field"><label>Full Name *</label><input value={form.name} onChange={f("name")} placeholder="Jane Smith" /></div>
+            <div className="field"><label>Firm / Organization</label><input value={form.firm} onChange={f("firm")} placeholder="Acme Capital" /></div>
+            <div className="field"><label>Email</label><input value={form.email} onChange={f("email")} /></div>
+            <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} /></div>
+            <div className="field"><label>Partner (Relationship Owner)</label>
+              <select value={form.partner} onChange={f("partner")}>{PARTNERS.map(p => <option key={p}>{p}</option>)}</select>
             </div>
-
-            {form.additionalContacts.map((contact, i) => (
-              <div key={i} style={{ background: 'var(--surface)', padding: '12px', borderRadius: 6, marginBottom: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <div style={{ fontWeight: 500, fontSize: 13 }}>{contact.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{contact.email} · {contact.role}</div>
-                </div>
-                <button className="btn btn-ghost btn-sm" onClick={() => removeContact(i)}>
-                  <Icon name="close" size={14} />
-                </button>
-              </div>
-            ))}
+            <div className="field"><label>Tier</label>
+              <select value={form.tier} onChange={f("tier")}>{TIERS.map(t => <option key={t}>{t}</option>)}</select>
+            </div>
+            <div className="field"><label>Fund</label>
+              <select value={form.fund} onChange={f("fund")}>{FUNDS.map(f => <option key={f}>{f}</option>)}</select>
+            </div>
+            <div className="field"><label>Stage</label>
+              <select value={form.stage} onChange={f("stage")}>{STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select>
+            </div>
+            <div className="field"><label>Commitment ($)</label><input type="number" value={form.commitment} onChange={e => setForm({ ...form, commitment: +e.target.value })} /></div>
+            <div className="field"><label>Funded ($)</label><input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} /></div>
+            <div className="field span2"><label>NAV / Current Mark ($)</label><input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} /></div>
           </div>
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={save}>Add LP</button>
-        </div>
-
-        {showAddContact && (
-          <AddAdditionalContactModal
-            onClose={() => setShowAddContact(false)}
-            onSave={saveAdditionalContact}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Mini modal for adding additional contact
-function AddAdditionalContactModal({ onClose, onSave }) {
-  const [contact, setContact] = useState({ name: '', email: '', phone: '', role: '' });
-
-  const handleSave = () => {
-    if (!contact.name) {
-      alert('Please enter a name');
-      return;
-    }
-    onSave(contact);
-  };
-
-  return (
-    <div className="overlay" onClick={onClose} style={{ zIndex: 10001 }}>
-      <div className="drawer" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
-        <div className="drawer-header">
-          <div className="drawer-title">Add Additional Contact</div>
-          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
-        </div>
-        <div className="drawer-body">
-          <div className="form-grid">
-            <div className="field span2">
-              <label>Name *</label>
-              <input value={contact.name} onChange={e => setContact({ ...contact, name: e.target.value })} placeholder="Laura Barnett" />
-            </div>
-            <div className="field span2">
-              <label>Email</label>
-              <input type="email" value={contact.email} onChange={e => setContact({ ...contact, email: e.target.value })} placeholder="laura@example.com" />
-            </div>
-            <div className="field">
-              <label>Phone</label>
-              <input value={contact.phone} onChange={e => setContact({ ...contact, phone: e.target.value })} placeholder="(555) 123-4567" />
-            </div>
-            <div className="field">
-              <label>Role</label>
-              <input value={contact.role} onChange={e => setContact({ ...contact, role: e.target.value })} placeholder="Operations" />
-            </div>
-          </div>
-        </div>
-        <div className="drawer-footer">
-          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add</button>
         </div>
       </div>
     </div>
@@ -1485,303 +1426,97 @@ function PipelinePage({ lps, saveLPs }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Seed schedule of investments data — each company has multiple financing rounds
-const SEED_SCHEDULE = []; // Removed seed data
+const SEED_SCHEDULE = [
+  {
+    company: "Aether AI", sector: "AI/ML", fund: "Decisive Point Fund II",
+    financings: [
+      { id: "ae1", asset: "SAFE", date: "2021-04-15", shares: 0, invested: 500000, value: 1500000, costPerShare: 0, fmvPerShare: 0 },
+      { id: "ae2", asset: "Series A", date: "2022-01-10", shares: 250000, invested: 1200000, value: 3600000, costPerShare: 4.80, fmvPerShare: 14.40 },
+      { id: "ae3", asset: "Series B", date: "2023-06-20", shares: 125000, invested: 1500000, value: 4500000, costPerShare: 12.00, fmvPerShare: 36.00 },
+    ]
+  },
+  {
+    company: "Verda Bio", sector: "Biotech", fund: "Decisive Point Fund II",
+    financings: [
+      { id: "vb1", asset: "Series A", date: "2021-09-05", shares: 400000, invested: 1000000, value: 2000000, costPerShare: 2.50, fmvPerShare: 5.00 },
+      { id: "vb2", asset: "Series A-1", date: "2022-11-18", shares: 150000, invested: 1100000, value: 2200000, costPerShare: 7.33, fmvPerShare: 14.67 },
+    ]
+  },
+  {
+    company: "CarbonVault", sector: "Climate Tech", fund: "Decisive Point Fund III (Current)",
+    financings: [
+      { id: "cv1", asset: "SAFE", date: "2024-02-01", shares: 0, invested: 800000, value: 1600000, costPerShare: 0, fmvPerShare: 0 },
+      { id: "cv2", asset: "Series A", date: "2024-08-15", shares: 200000, invested: 1000000, value: 2000000, costPerShare: 5.00, fmvPerShare: 10.00 },
+    ]
+  },
+  {
+    company: "Nexus Robotics", sector: "Robotics", fund: "Decisive Point Fund III (Current)",
+    financings: [
+      { id: "nr1", asset: "Seed", date: "2024-04-10", shares: 500000, invested: 2500000, value: 2500000, costPerShare: 5.00, fmvPerShare: 5.00 },
+    ]
+  },
+  {
+    company: "Luminary Health", sector: "Digital Health", fund: "Decisive Point Fund II",
+    financings: [
+      { id: "lh1", asset: "Series A", date: "2022-03-22", shares: 300000, invested: 750000, value: 2250000, costPerShare: 2.50, fmvPerShare: 7.50 },
+      { id: "lh2", asset: "Series B", date: "2023-10-05", shares: 100000, invested: 750000, value: 2250000, costPerShare: 7.50, fmvPerShare: 22.50 },
+    ]
+  },
+];
 
-function PortfolioPage({ fundDefs }) {
+function PortfolioPage() {
   const [schedule, setSchedule] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [addFinancingFor, setAddFinancingFor] = useState(null);
   const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
 
-  // Get fund names from fundDefs, or fall back to FUNDS constant
-  const fundNames = fundDefs?.map(f => f.name) || FUNDS;
-  
-  console.log('🎯 PortfolioPage - fundDefs:', fundDefs);
-  console.log('🎯 PortfolioPage - fundNames:', fundNames);
-
   useEffect(() => {
-    loadPortfolioFromSupabase();
+    loadData("dp_schedule_v1", SEED_SCHEDULE).then(data => setSchedule(data));
   }, []);
 
-  const loadPortfolioFromSupabase = async () => {
-    try {
-      // Load companies
-      const { data: companies, error: compError } = await supabase
-        .from('portfolio_companies')
-        .select('*')
-        .order('company_name');
-      
-      if (compError) throw compError;
-
-      // Load all financings
-      const { data: financings, error: finError } = await supabase
-        .from('financings')
-        .select('*')
-        .order('date');
-      
-      if (finError) throw finError;
-
-      // Combine into schedule format
-      const schedule = (companies || []).map(comp => ({
-        company: comp.company_name,
-        companyId: comp.id, // Store the database ID
-        sector: comp.sector,
-        manualFMV: comp.manual_fmv,
-        financings: (financings || [])
-          .filter(f => f.company_id === comp.id)
-          .map(f => ({
-            id: f.id,
-            asset: f.asset,
-            fund: f.fund,
-            date: f.date,
-            invested: parseFloat(f.invested),
-            shares: parseInt(f.shares),
-            costPerShare: parseFloat(f.cost_per_share) || 0,
-            fmvPerShare: parseFloat(f.fmv_per_share) || 0,
-            isManualShares: f.is_manual_shares,
-            value: 0 // Calculated on the fly
-          }))
-      }));
-
-      console.log('📂 Loaded portfolio from Supabase:', schedule);
-      setSchedule(schedule);
-    } catch (error) {
-      console.error('❌ Error loading portfolio:', error);
-      setSchedule([]);
-    }
-  };
-
-  const saveSchedule = async (updated) => {
-    setSchedule(updated);
-    // Portfolio is now saved through individual add/update/delete functions
-    // This function kept for compatibility but doesn't save to Supabase
-  };
+  const saveSchedule = (updated) => { setSchedule(updated); saveData("dp_schedule_v1", updated); };
 
   const toggleExpand = (company) => setExpanded(prev => ({ ...prev, [company]: !prev[company] }));
 
   if (!schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading…</div>;
 
-  // Totals across all - using auto-calculated values with manual overrides
-  const totalInvested = schedule.reduce((total, comp) => {
-    return total + comp.financings.reduce((s, f) => s + f.invested, 0);
+  // Totals across all companies
+  const totalInvested = schedule.reduce((sum, comp) => {
+    return sum + comp.financings.reduce((s, f) => s + (f.invested || 0), 0);
   }, 0);
   
-  const totalValue = schedule.reduce((total, comp) => {
-    // FMV logic: manual override > most recent by date > last entered
-    let syncedFMV = 0;
-    if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
-      syncedFMV = comp.manualFMV;
-    } else if (comp.financings.length > 0) {
-      const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
-      syncedFMV = sortedByDate[0]?.costPerShare || 0;
-    }
+  const totalValue = schedule.reduce((sum, comp) => {
+    // Get company FMV from latest round
+    const latestRound = comp.financings[comp.financings.length - 1];
+    const companyFMV = latestRound?.costPerShare || latestRound?.fmvPerShare || 0;
     
-    return total + comp.financings.reduce((s, f) => {
-      // Handle manual vs auto-calculated shares
-      const shares = f.isManualShares 
-        ? f.shares
-        : (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares);
-      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
-      return s + (shares * fmv);
+    // Sum: shares * FMV for each financing
+    return sum + comp.financings.reduce((s, f) => {
+      const calculatedShares = f.costPerShare > 0 ? f.invested / f.costPerShare : 0;
+      const shares = f.shares || calculatedShares;
+      return s + (shares * companyFMV);
     }, 0);
   }, 0);
   
   const totalGainLoss = totalValue - totalInvested;
-  const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
+  const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
-  const updateFinancing = async (compIdx, finIdx, field, val) => {
-    const comp = schedule[compIdx];
-    const fin = comp.financings[finIdx];
-    
-    try {
-      // Map field names to database columns
-      const fieldMap = {
-        date: 'date',
-        invested: 'invested',
-        costPerShare: 'cost_per_share',
-        fmvPerShare: 'fmv_per_share',
-        fund: 'fund',
-        asset: 'asset',
-        shares: 'shares'
-      };
-      
-      const dbField = fieldMap[field] || field;
-      const { error } = await supabase
-        .from('financings')
-        .update({ [dbField]: isNaN(+val) ? val : +val })
-        .eq('id', fin.id);
-      
-      if (error) throw error;
-      
-      // Update local state
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-        ...c,
-        financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
-      });
-      setSchedule(updated);
-    } catch (error) {
-      console.error('❌ Error updating financing:', error);
-      alert('Error updating financing');
-    }
+  const updateFinancing = (compIdx, finIdx, field, val) => {
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+      ...c,
+      financings: c.financings.map((f, fi) => fi !== finIdx ? f : { ...f, [field]: isNaN(+val) ? val : +val })
+    });
+    saveSchedule(updated);
   };
 
-  const deleteFinancing = async (compIdx, finIdx) => {
-    if (!confirm('Delete this financing round?')) return;
-    
-    const comp = schedule[compIdx];
-    const fin = comp.financings[finIdx];
-    
-    try {
-      const { error } = await supabase
-        .from('financings')
-        .delete()
-        .eq('id', fin.id);
-      
-      if (error) throw error;
-      
-      // Update local state
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-        ...c,
-        financings: c.financings.filter((f, fi) => fi !== finIdx)
-      });
-      setSchedule(updated);
-    } catch (error) {
-      console.error('❌ Error deleting financing:', error);
-      alert('Error deleting financing');
-    }
+  const addFinancing = (compIdx, fin) => {
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, financings: [...c.financings, { ...fin, id: "f" + Date.now() }] });
+    saveSchedule(updated);
+    setAddFinancingFor(null);
   };
 
-  const deleteCompany = async (compIdx) => {
-    const company = schedule[compIdx];
-    if (!confirm(`Delete ${company.company} and all its financing rounds?`)) return;
-    
-    try {
-      // Use the stored database ID
-      if (company.companyId) {
-        const { error } = await supabase
-          .from('portfolio_companies')
-          .delete()
-          .eq('id', company.companyId);
-        
-        if (error) throw error;
-      }
-      
-      // Update local state
-      const updated = schedule.filter((c, ci) => ci !== compIdx);
-      setSchedule(updated);
-    } catch (error) {
-      console.error('❌ Error deleting company:', error);
-      alert('Error deleting company');
-    }
-  };
-
-  const updateCompanyFMV = async (compIdx, fmv) => {
-    const company = schedule[compIdx];
-    
-    try {
-      // Use stored database ID
-      if (company.companyId) {
-        const { error } = await supabase
-          .from('portfolio_companies')
-          .update({ manual_fmv: fmv })
-          .eq('id', company.companyId);
-        
-        if (error) throw error;
-      }
-      
-      // Update local state
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, manualFMV: fmv });
-      setSchedule(updated);
-    } catch (error) {
-      console.error('❌ Error updating FMV:', error);
-      alert('Error updating FMV');
-    }
-  };
-
-  const addFinancing = async (compIdx, fin) => {
-    console.log('➕ Adding financing:', fin, 'to company index:', compIdx);
-    const company = schedule[compIdx];
-    
-    try {
-      if (!company.companyId) throw new Error('Company ID not found');
-      
-      // Insert financing
-      const { data: newFin, error } = await supabase
-        .from('financings')
-        .insert({
-          company_id: company.companyId,
-          asset: fin.asset,
-          fund: fin.fund,
-          date: fin.date,
-          invested: fin.invested,
-          shares: fin.shares,
-          cost_per_share: fin.costPerShare || 0,
-          fmv_per_share: fin.fmvPerShare || 0,
-          is_manual_shares: fin.isManualShares || false
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Update local state
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { 
-        ...c, 
-        financings: [...c.financings, {
-          id: newFin.id,
-          asset: newFin.asset,
-          fund: newFin.fund,
-          date: newFin.date,
-          invested: parseFloat(newFin.invested),
-          shares: parseInt(newFin.shares),
-          costPerShare: parseFloat(newFin.cost_per_share) || 0,
-          fmvPerShare: parseFloat(newFin.fmv_per_share) || 0,
-          isManualShares: newFin.is_manual_shares,
-          value: 0
-        }] 
-      });
-      console.log('📊 Updated schedule:', updated);
-      setSchedule(updated);
-      setAddFinancingFor(null);
-    } catch (error) {
-      console.error('❌ Error adding financing:', error);
-      alert('Error adding financing: ' + error.message);
-    }
-  };
-
-  const addCompany = async (comp) => {
-    console.log('➕ Adding company:', comp);
-    
-    try {
-      // Insert company
-      const { data: newComp, error } = await supabase
-        .from('portfolio_companies')
-        .insert({
-          company_name: comp.company,
-          sector: comp.sector
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      // Update local state
-      const updated = [...schedule, { 
-        company: newComp.company_name,
-        companyId: newComp.id,
-        sector: newComp.sector,
-        manualFMV: null,
-        financings: [] 
-      }];
-      console.log('📊 Updated schedule:', updated);
-      setSchedule(updated);
-      setShowAddCompany(false);
-    } catch (error) {
-      console.error('❌ Error adding company:', error);
-      alert('Error adding company: ' + error.message);
-    }
-  };
+  const addCompany = (comp) => { saveSchedule([...schedule, { ...comp, financings: [] }]); setShowAddCompany(false); };
 
   return (
     <div>
@@ -1798,11 +1533,6 @@ function PortfolioPage({ fundDefs }) {
           <button className="btn btn-primary btn-sm" onClick={() => setShowAddCompany(true)}>
             <Icon name="plus" size={13} /> Add Company
           </button>
-        </div>
-        
-        {/* Auto-calculation explanation */}
-        <div style={{ background: 'var(--gold-light)', padding: '10px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--gold-dark)' }}>
-          <strong>💡 Auto-calculations:</strong> Shares = Investment ÷ Cost/Share  •  Value = Shares × FMV/Share  •  FMV syncs from latest round's cost/share  •  Click any field to edit
         </div>
 
         {/* Header row */}
@@ -1826,35 +1556,24 @@ function PortfolioPage({ fundDefs }) {
             </thead>
             <tbody>
               {schedule.map((comp, compIdx) => {
-                // FMV logic: manual override > most recent by date > last entered
-                let syncedFMV = 0;
-                if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
-                  syncedFMV = comp.manualFMV; // Manual override
-                } else if (comp.financings.length > 0) {
-                  // Find most recent round by date
-                  const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
-                  syncedFMV = sortedByDate[0]?.costPerShare || 0;
-                }
+                // Calculate company totals
+                const compShares = comp.financings.reduce((s, f) => s + (f.shares || 0), 0);
+                const compInvested = comp.financings.reduce((s, f) => s + (f.invested || 0), 0);
                 
-                const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
+                // Get latest round's cost/share as FMV for entire company
+                const latestRound = comp.financings[comp.financings.length - 1];
+                const companyFMV = latestRound?.costPerShare || latestRound?.fmvPerShare || 0;
+                
+                // Calculate company value: sum of (shares * FMV) for each financing
                 const compValue = comp.financings.reduce((s, f) => {
-                  const shares = f.isManualShares 
-                    ? f.shares
-                    : (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares);
-                  const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
-                  return s + (shares * fmv);
+                  const shares = f.shares || 0;
+                  return s + (shares * companyFMV);
                 }, 0);
-                const compGL       = compValue - compInvested;
-                const compMOIC     = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
-                const isOpen       = expanded[comp.company];
                 
-                // Get unique funds across all financings
-                const fundsInvested = [...new Set(comp.financings.map(f => f.fund).filter(Boolean))];
-                const fundDisplay = fundsInvested.length === 1 
-                  ? fundsInvested[0].replace("Decisive Point ", "")
-                  : fundsInvested.length > 1 
-                    ? `${fundsInvested.length} funds`
-                    : "—";
+                const compGL = compValue - compInvested;
+                const compMOIC = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
+                const isOpen = expanded[comp.company];
+                const shortFund = comp.fund?.replace("Decisive Point ", "") || "";
 
                 return [
                   /* ── Company summary row (accordion header) ── */
@@ -1870,72 +1589,54 @@ function PortfolioPage({ fundDefs }) {
                           transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
                         }}>▶</span>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{comp.company}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {comp.company}
+                            <button 
+                              className="btn btn-ghost btn-sm" 
+                              onClick={(e) => { e.stopPropagation(); /* TODO: edit company */ }}
+                              style={{ padding: '2px 6px' }}
+                              title="Edit company"
+                            >
+                              <Icon name="edit" size={11} />
+                            </button>
+                          </div>
                           <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
                         </div>
                       </div>
                     </td>
                     <td><span className="badge-blue stat-badge">{comp.sector}</span></td>
-                    <td>
-                      <span className="tag" style={{ fontSize: 11 }} title={fundsInvested.length > 1 ? fundsInvested.join(', ') : ''}>
-                        {fundDisplay}
-                      </span>
-                    </td>
+                    <td><span className="tag" style={{ fontSize: 11 }}>{shortFund}</span></td>
                     <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{compShares > 0 ? compShares.toLocaleString() : '—'}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
                     <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right" }} onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                        <span style={{ color: comp.manualFMV !== undefined ? 'var(--gold-dark)' : 'var(--ink)', fontWeight: comp.manualFMV !== undefined ? 600 : 400 }}>
-                          ${syncedFMV.toFixed(2)}
-                        </span>
-                        <button 
-                          className="btn btn-ghost btn-sm" 
-                          onClick={() => {
-                            const newFMV = prompt(`Set FMV per share for ${comp.company}:`, syncedFMV);
-                            if (newFMV !== null) updateCompanyFMV(compIdx, newFMV === '' ? null : +newFMV);
-                          }}
-                          title="Override FMV per share"
-                          style={{ padding: '2px 4px' }}
-                        >
-                          <Icon name="edit" size={10} />
-                        </button>
-                      </div>
-                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold)" }}>{companyFMV > 0 ? `$${companyFMV.toFixed(2)}` : '—'}</td>
                     <td style={{ textAlign: "right" }}>
                       <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
-                          <Icon name="plus" size={12} />
-                        </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => deleteCompany(compIdx)} title="Delete company" style={{ color: 'var(--red)' }}>
-                          <Icon name="close" size={12} />
-                        </button>
-                      </div>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
+                        <Icon name="plus" size={12} />
+                      </button>
                     </td>
                   </tr>,
 
                   /* ── Financing rows (expanded) ── */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
-                    // Use same FMV logic
-                    const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
+                    // Use company FMV for all rounds
+                    const fmvPerShare = companyFMV;
                     
-                    // Handle manual vs auto-calculated shares
-                    const calculatedShares = fin.isManualShares 
-                      ? fin.shares  // Use manually entered shares
-                      : (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares);
+                    // Auto-calculate shares if not provided: invested / cost_per_share
+                    const calculatedShares = fin.costPerShare > 0 ? fin.invested / fin.costPerShare : 0;
+                    const shares = fin.shares || calculatedShares;
                     
-                    // Auto-calculate current value from shares * FMV
-                    const calculatedValue = calculatedShares * displayFMV;
+                    // Auto-calculate value: shares * fmv_per_share
+                    const value = shares * fmvPerShare;
                     
-                    // Calculate gain/loss and MOIC from auto-calculated value
-                    const gl = calculatedValue - fin.invested;
-                    const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
+                    const gl = value - fin.invested;
+                    const moic = fin.invested > 0 ? (value / fin.invested).toFixed(2) : "—";
                     
                     const cellKey = (field) => `${compIdx}-${finIdx}-${field}`;
                     const isEditing = (field) => editingCell === cellKey(field);
@@ -1962,75 +1663,69 @@ function PortfolioPage({ fundDefs }) {
                             {isNum && field !== "costPerShare" && field !== "fmvPerShare" && field !== "shares" 
                               ? fmtMoney(fin[field]) 
                               : field === "shares" 
-                                ? fin[field].toLocaleString() 
+                                ? (fin[field] || calculatedShares).toLocaleString() 
                                 : fin[field]}
                           </span>
                     );
+                    
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
-                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
+                              {isEditing('asset')
+                                ? <input 
+                                    autoFocus
+                                    defaultValue={fin.asset}
+                                    onBlur={e => editCell('asset', e.target.value, false)}
+                                    onKeyDown={e => { if (e.key === "Enter") editCell('asset', e.target.value, false); if (e.key === "Escape") setEditingCell(null); }}
+                                    style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 11 }}
+                                  />
+                                : fin.asset
+                              }
+                            </span>
+                            <button 
+                              className="btn btn-ghost btn-sm" 
+                              onClick={(e) => { e.stopPropagation(); setEditingCell(cellKey('asset')); }}
+                              style={{ padding: '2px 6px', opacity: 0.6 }}
+                              title="Edit stage"
+                            >
+                              <Icon name="edit" size={10} />
+                            </button>
+                          </div>
                         </td>
                         <td></td>
-                        <td style={{ fontSize: 12 }}>
-                          {isEditing("fund")
-                            ? <select 
-                                autoFocus 
-                                defaultValue={fin.fund || FUNDS[0]} 
-                                onBlur={e => editCell("fund", e.target.value, false)}
-                                onKeyDown={e => { if (e.key === "Enter") editCell("fund", e.target.value, false); if (e.key === "Escape") setEditingCell(null); }}
-                                style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)", width: '100%' }}
-                              >
-                                {fundNames.map(f => <option key={f} value={f}>{f}</option>)}
-                              </select>
-                            : <span 
-                                onClick={() => setEditingCell(cellKey("fund"))} 
-                                style={{ cursor: "pointer", fontSize: 11, color: "var(--ink)" }}
-                                title="Click to change fund"
-                              >
-                                {fin.fund ? fin.fund.replace("Decisive Point ", "") : "Select fund"}
-                              </span>
-                          }
-                        </td>
+                        <td></td>
                         <td style={{ fontSize: 12 }}>
                           {isEditing("date")
                             ? <input autoFocus defaultValue={fin.date} type="date" onBlur={e => editCell("date", e.target.value, false)} style={{ border: "1px solid var(--gold)", borderRadius: 4, padding: "2px 4px", fontSize: 12, fontFamily: "var(--sans)" }} />
-                            : <span onClick={() => setEditingCell(cellKey("date"))} style={{ cursor: "text" }}>{fin.date}</span>
+                            : <span onClick={() => setEditingCell(cellKey("date"))} style={{ cursor: "text" }} title="Click to edit">{fin.date}</span>
                           }
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          <span style={{ color: "var(--ink-muted)" }} title="Auto-calculated: Investment ÷ Cost/Share">
-                            {calculatedShares.toLocaleString()}
-                          </span>
+                          <EditableCell field="shares" />
+                          {!fin.shares && calculatedShares > 0 && <span style={{ fontSize: 10, color: 'var(--ink-muted)', marginLeft: 4 }} title="Auto-calculated from invested / cost per share">(auto)</span>}
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}><EditableCell field="invested" /></td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
-                          <span title="Auto-calculated: Shares × FMV/Share">{fmtMoney(calculatedValue)}</span>
+                        <td style={{ textAlign: "right", fontSize: 12, color: value >= fin.invested ? "var(--green)" : "var(--red)", fontWeight: 600 }}>
+                          {fmtMoney(value)}
+                          <span style={{ fontSize: 10, color: 'var(--ink-muted)', marginLeft: 4 }} title="Auto-calculated: shares × FMV">(auto)</span>
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
                           {fin.costPerShare > 0 ? <EditableCell field="costPerShare" /> : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
                         </td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {displayFMV > 0 ? (
-                            <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round - sets FMV for all rounds"} style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
-                              ${displayFMV.toFixed(2)}
+                        <td style={{ textAlign: "right", fontSize: 12, fontWeight: 600, color: "var(--gold)" }}>
+                          {fmvPerShare > 0 ? (
+                            <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round - set cost/share to update"}>
+                              ${fmvPerShare.toFixed(2)}
                             </span>
-                          ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                          ) : '—'}
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
                         </td>
-                        <td>
-                          <button 
-                            className="btn btn-ghost btn-sm" 
-                            onClick={() => deleteFinancing(compIdx, finIdx)} 
-                            title="Delete this round"
-                            style={{ color: 'var(--red)', padding: '2px 4px' }}
-                          >
-                            <Icon name="close" size={10} />
-                          </button>
-                        </td>
+                        <td></td>
                       </tr>
                     );
                   }) : [])
@@ -2058,7 +1753,6 @@ function PortfolioPage({ fundDefs }) {
       {addFinancingFor !== null && (
         <AddFinancingModal
           company={schedule[addFinancingFor]?.company}
-          fundNames={fundNames}
           onClose={() => setAddFinancingFor(null)}
           onSave={(fin) => addFinancing(addFinancingFor, fin)}
         />
@@ -2075,54 +1769,12 @@ function PortfolioPage({ fundDefs }) {
   );
 }
 
-function AddFinancingModal({ company, fundNames, onClose, onSave }) {
-  const [form, setForm] = useState({ 
-    asset: "SAFE", 
-    date: "", 
-    invested: 0, 
-    costPerShare: 0,
-    manualShares: 0,
-    fund: fundNames?.[0] || FUNDS[0]
-  });
-  const [useManualShares, setUseManualShares] = useState(false);
-  
-  // Auto-calculate shares when invested or costPerShare changes
-  const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
-  const finalShares = useManualShares ? form.manualShares : calculatedShares;
-  
-  const handleSave = () => {
-    if (!form.date || !form.invested || !form.fund) {
-      alert('Please fill in Date, Investment Amount, and Fund');
-      return;
-    }
-    
-    if (!useManualShares && !form.costPerShare) {
-      alert('Please enter Cost per Share or toggle to manual shares entry');
-      return;
-    }
-    
-    if (useManualShares && !form.manualShares) {
-      alert('Please enter number of shares');
-      return;
-    }
-    
-    // Save with calculated or manual shares
-    onSave({
-      ...form,
-      shares: finalShares,
-      value: form.invested, // Initial value equals investment
-      fmvPerShare: form.costPerShare || 0, // FMV equals cost, or 0 for SAFEs
-      isManualShares: useManualShares // Track if shares were manually entered
-    });
-  };
-  
+function AddFinancingModal({ company, onClose, onSave }) {
+  const [form, setForm] = useState({ asset: "SAFE", date: "", shares: 0, invested: 0, value: 0, costPerShare: 0, fmvPerShare: 0 });
   const f = k => e => setForm({ ...form, [k]: e.target.value });
-  
-  const availableFunds = fundNames || FUNDS;
-  
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+      <div className="drawer" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
         <div className="drawer-header">
           <div>
             <div className="drawer-title">Add Financing Round</div>
@@ -2137,85 +1789,17 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
                 {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
               </select>
             </div>
-            <div className="field"><label>Fund / SPV *</label>
-              <select value={form.fund} onChange={f("fund")}>
-                {availableFunds.map(fund => <option key={fund}>{fund}</option>)}
-              </select>
-            </div>
-            <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
-            <div className="field"><label>Investment Amount ($) *</label>
-              <input 
-                type="number" 
-                value={form.invested} 
-                onChange={e => setForm({...form, invested: +e.target.value})} 
-                placeholder="1000000"
-              />
-            </div>
-            
-            {/* Toggle for manual shares entry */}
-            <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
-                <input 
-                  type="checkbox" 
-                  checked={useManualShares} 
-                  onChange={e => setUseManualShares(e.target.checked)}
-                  style={{ width: 16, height: 16, cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry (for SAFEs, convertible notes, etc.)</span>
-              </label>
-            </div>
-            
-            {!useManualShares ? (
-              <>
-                <div className="field"><label>Cost per Share ($) *</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={form.costPerShare} 
-                    onChange={e => setForm({...form, costPerShare: +e.target.value})} 
-                    placeholder="5.00"
-                  />
-                </div>
-                <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
-                    {calculatedShares.toLocaleString()}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="field"><label>Number of Shares *</label>
-                  <input 
-                    type="number" 
-                    value={form.manualShares} 
-                    onChange={e => setForm({...form, manualShares: +e.target.value})} 
-                    placeholder="200000"
-                  />
-                </div>
-                <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={form.costPerShare} 
-                    onChange={e => setForm({...form, costPerShare: +e.target.value})} 
-                    placeholder="0.00"
-                  />
-                </div>
-              </>
-            )}
-            
-            <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
-              <strong>Note:</strong> {useManualShares 
-                ? "Manual shares mode - enter exact share count. Use for unconverted SAFEs, convertible notes, or hardcoded amounts."
-                : "Auto-calculation mode - shares will be calculated from investment amount ÷ cost per share."
-              }
-            </div>
+            <div className="field"><label>Investment Date</label><input type="date" value={form.date} onChange={f("date")} /></div>
+            <div className="field"><label>Shares</label><input type="number" value={form.shares} onChange={e => setForm({...form, shares: +e.target.value})} /></div>
+            <div className="field"><label>Invested ($)</label><input type="number" value={form.invested} onChange={e => setForm({...form, invested: +e.target.value})} /></div>
+            <div className="field"><label>Current Value ($)</label><input type="number" value={form.value} onChange={e => setForm({...form, value: +e.target.value})} /></div>
+            <div className="field"><label>Cost per Share ($)</label><input type="number" value={form.costPerShare} onChange={e => setForm({...form, costPerShare: +e.target.value})} /></div>
+            <div className="field"><label>FMV per Share ($)</label><input type="number" value={form.fmvPerShare} onChange={e => setForm({...form, fmvPerShare: +e.target.value})} /></div>
           </div>
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Add Round</button>
+          <button className="btn btn-primary" onClick={() => onSave(form)}>Add Round</button>
         </div>
       </div>
     </div>
@@ -2223,7 +1807,7 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
 }
 
 function AddCompanyModal({ onClose, onSave }) {
-  const [form, setForm] = useState({ company: "", sector: "" });
+  const [form, setForm] = useState({ company: "", sector: "", fund: FUNDS[2] });
   const f = k => e => setForm({ ...form, [k]: e.target.value });
   return (
     <div className="overlay" onClick={onClose}>
@@ -2235,10 +1819,10 @@ function AddCompanyModal({ onClose, onSave }) {
         <div className="drawer-body">
           <div className="form-grid">
             <div className="field span2"><label>Company Name</label><input value={form.company} onChange={f("company")} placeholder="Acme Corp" /></div>
-            <div className="field span2"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 12, padding: '10px', background: 'var(--surface)', borderRadius: 6 }}>
-            💡 After adding the company, add financing rounds to specify which fund(s) invested.
+            <div className="field"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
+            <div className="field"><label>Fund</label>
+              <select value={form.fund} onChange={f("fund")}>{FUNDS.map(fd => <option key={fd}>{fd}</option>)}</select>
+            </div>
           </div>
         </div>
         <div className="drawer-footer">
@@ -2814,42 +2398,28 @@ function InvestorPortal({ lp, onExit }) {
 // ── FUND PAGE ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
-  const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
   const [investments, setInvestments] = useState([]);
   const [contacts, setContacts] = useState([]);
-  const [portfolio, setPortfolio] = useState([]);
   const [loading, setLoading] = useState(true);
   
   const fd = (fundDefs || FUND_DEFS).find(f => f.name === fundName) || FUND_DEFS[0];
 
   useEffect(() => {
     loadFundData();
-    loadPortfolio();
   }, [fundName]);
 
   const loadFundData = async () => {
     try {
       // Get fund ID
-      const { data: fundData, error: fundError } = await supabase
+      const { data: fundData } = await supabase
         .from('funds')
         .select('id')
         .eq('name', fundName)
         .single();
 
-      if (fundError) {
-        console.error('Fund lookup error:', fundError);
-        setInvestments([]);
-        setContacts([]);
-        setLoading(false);
-        return;
-      }
-
       if (!fundData) {
-        console.warn('Fund not found:', fundName);
-        setInvestments([]);
-        setContacts([]);
         setLoading(false);
         return;
       }
@@ -2857,30 +2427,12 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
       // Load investment records for this fund
       const { data: investmentData, error: invError } = await supabase
         .from('lps')
-        .select('*')
+        .select('*, contact:parent_lp_id(*)')
         .eq('fund_id', fundData.id)
-        .eq('is_contact_record', false);
+        .eq('is_contact_record', false)
+        .order('created_at', { ascending: false });
 
-      if (invError) {
-        console.error('Investment load error:', invError);
-        setInvestments([]);
-      } else {
-        // Manually load contact data for each investment
-        const investmentsWithContacts = await Promise.all(
-          (investmentData || []).map(async (inv) => {
-            if (!inv.parent_lp_id) return { ...inv, contact: null };
-            
-            const { data: contactData } = await supabase
-              .from('lps')
-              .select('*')
-              .eq('id', inv.parent_lp_id)
-              .single();
-            
-            return { ...inv, contact: contactData };
-          })
-        );
-        setInvestments(investmentsWithContacts);
-      }
+      if (invError) throw invError;
 
       // Load all contacts for dropdown
       const { data: contactData, error: contactError } = await supabase
@@ -2889,65 +2441,14 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         .eq('is_contact_record', true)
         .order('name');
 
-      if (contactError) {
-        console.error('Contact load error:', contactError);
-        setContacts([]);
-      } else {
-        setContacts(contactData || []);
-      }
+      if (contactError) throw contactError;
+
+      setInvestments(investmentData || []);
+      setContacts(contactData || []);
     } catch (error) {
       console.error('Error loading fund data:', error);
-      setInvestments([]);
-      setContacts([]);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadPortfolio = async () => {
-    try {
-      // Load companies
-      const { data: companies, error: compError } = await supabase
-        .from('portfolio_companies')
-        .select('*')
-        .order('company_name');
-      
-      if (compError) throw compError;
-
-      // Load all financings
-      const { data: financings, error: finError } = await supabase
-        .from('financings')
-        .select('*')
-        .order('date');
-      
-      if (finError) throw finError;
-
-      // Combine into schedule format
-      const allCompanies = (companies || []).map(comp => ({
-        company: comp.company_name,
-        companyId: comp.id,
-        sector: comp.sector,
-        manualFMV: comp.manual_fmv,
-        financings: (financings || [])
-          .filter(f => f.company_id === comp.id)
-          .map(f => ({
-            id: f.id,
-            asset: f.asset,
-            fund: f.fund,
-            date: f.date,
-            invested: parseFloat(f.invested),
-            shares: parseInt(f.shares),
-            costPerShare: parseFloat(f.cost_per_share) || 0,
-            fmvPerShare: parseFloat(f.fmv_per_share) || 0,
-            isManualShares: f.is_manual_shares,
-            value: 0
-          }))
-      }));
-      
-      setPortfolio(allCompanies);
-    } catch (error) {
-      console.error('Portfolio load error:', error);
-      setPortfolio([]);
     }
   };
 
@@ -3044,46 +2545,6 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         ))}
       </div>
 
-      {/* ── Tabs ── */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 22, borderBottom: '2px solid var(--border)' }}>
-        <button 
-          onClick={() => setActiveTab('lps')}
-          style={{
-            background: activeTab === 'lps' ? 'var(--gold-light)' : 'transparent',
-            border: 'none',
-            borderBottom: activeTab === 'lps' ? '3px solid var(--gold-dark)' : '3px solid transparent',
-            color: activeTab === 'lps' ? 'var(--gold-dark)' : 'var(--ink-muted)',
-            padding: '12px 24px',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            marginBottom: -2,
-            transition: 'all 0.2s'
-          }}
-        >
-          LPs & Pipeline
-        </button>
-        <button 
-          onClick={() => setActiveTab('portfolio')}
-          style={{
-            background: activeTab === 'portfolio' ? 'var(--gold-light)' : 'transparent',
-            border: 'none',
-            borderBottom: activeTab === 'portfolio' ? '3px solid var(--gold-dark)' : '3px solid transparent',
-            color: activeTab === 'portfolio' ? 'var(--gold-dark)' : 'var(--ink-muted)',
-            padding: '12px 24px',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            marginBottom: -2,
-            transition: 'all 0.2s'
-          }}
-        >
-          Portfolio ({portfolio.length})
-        </button>
-      </div>
-
-      {activeTab === 'lps' && (
-      <>
       <div className="two-col">
         {/* ── Pipeline prospects ── */}
         <div className="card">
@@ -3141,22 +2602,21 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
                 const contactFirm = inv.contact?.firm || '';
                 return (
                   <div key={inv.id}
-                    style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
-                    onClick={() => setSelectedLP(inv)}>
-                    <div className="avatar">{initials(contactName)}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(inv.commitment, true)}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
-                        {inv.funded > 0 ? `${Math.round((inv.funded/inv.commitment)*100)}% funded` : "Not yet called"}
-                      </div>
+                  style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
+                  onClick={() => setSelectedLP(lp)}>
+                  <div className="avatar">{initials(lp.name)}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 500, fontSize: 13.5 }}>{lp.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{lp.firm}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(lp.commitment, true)}</div>
+                    <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                      {lp.funded > 0 ? `${Math.round((lp.funded/lp.commitment)*100)}% funded` : "Not yet called"}
                     </div>
                   </div>
-                );
-              })
+                </div>
+              ))
             }
           </div>
         </div>
@@ -3168,7 +2628,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           <span className="card-title">All LPs — {shortName}</span>
         </div>
         <div className="card-body">
-          {investments.length === 0
+          {fundLPs.length === 0
             ? <div className="empty"><p>No LPs assigned to this fund yet.</p></div>
             : (
               <table>
@@ -3183,27 +2643,25 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {investments.map(inv => {
-                    const s = stageInfo(inv.stage);
-                    const contactName = inv.contact?.name || inv.name || 'Unknown';
-                    const contactFirm = inv.contact?.firm || inv.firm || '';
+                  {fundLPs.map(lp => {
+                    const s = stageInfo(lp.stage);
                     return (
-                      <tr key={inv.id} onClick={() => setSelectedLP(inv)}>
+                      <tr key={lp.id} onClick={() => setSelectedLP(lp)}>
                         <td>
                           <div className="flex-row">
-                            <div className="avatar">{initials(contactName)}</div>
+                            <div className="avatar">{initials(lp.name)}</div>
                             <div>
-                              <div className="td-name">{contactName}</div>
-                              <div className="td-sub">{contactFirm}</div>
+                              <div className="td-name">{lp.name}</div>
+                              <div className="td-sub">{lp.firm}</div>
                             </div>
                           </div>
                         </td>
                         <td><span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span></td>
-                        <td style={{ fontSize: 13 }}>{inv.partner || inv.contact?.partner || '—'}</td>
-                        <td style={{ fontWeight: 500 }}>{inv.commitment ? fmtMoney(inv.commitment) : "—"}</td>
-                        <td>{inv.funded ? fmtMoney(inv.funded) : "—"}</td>
-                        <td style={{ color: inv.nav > inv.funded ? "var(--green)" : "var(--ink)" }}>
-                          {inv.nav ? fmtMoney(inv.nav) : "—"}
+                        <td style={{ fontSize: 13 }}>{lp.partner}</td>
+                        <td style={{ fontWeight: 500 }}>{lp.commitment ? fmtMoney(lp.commitment) : "—"}</td>
+                        <td>{lp.funded ? fmtMoney(lp.funded) : "—"}</td>
+                        <td style={{ color: lp.nav > lp.funded ? "var(--green)" : "var(--ink)" }}>
+                          {lp.nav ? fmtMoney(lp.nav) : "—"}
                         </td>
                       </tr>
                     );
@@ -3213,12 +2671,6 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             )}
         </div>
       </div>
-      </>
-      )}
-
-      {activeTab === 'portfolio' && (
-        <FundPortfolioTab portfolio={portfolio} fundName={fundName} />
-      )}
 
       {selectedLP && (
         <LPDetailDrawer
@@ -3245,247 +2697,50 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
   );
 }
 
-// ── Fund Portfolio Tab ──
-function FundPortfolioTab({ portfolio, fundName }) {
-  const [expanded, setExpanded] = useState({});
-  
-  const toggleExpand = (company) => setExpanded(prev => ({ ...prev, [company]: !prev[company] }));
-  
-  // Filter companies to only show those with at least one financing from this fund
-  // And within each company, only show financings from this fund
-  const fundPortfolio = portfolio
-    .map(comp => ({
-      ...comp,
-      financings: comp.financings.filter(f => f.fund === fundName)
-    }))
-    .filter(comp => comp.financings.length > 0);
-  
-  // Calculate fund-level totals (only from this fund's financings)
-  const totalInvested = fundPortfolio.reduce((total, comp) => {
-    return total + comp.financings.reduce((s, f) => s + f.invested, 0);
-  }, 0);
-  
-  const totalValue = fundPortfolio.reduce((total, comp) => {
-    const latestRound = comp.financings[comp.financings.length - 1];
-    const syncedFMV = latestRound?.costPerShare || 0;
-    
-    return total + comp.financings.reduce((s, f) => {
-      const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
-      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
-      return s + (shares * fmv);
-    }, 0);
-  }, 0);
-  
-  const totalGainLoss = totalValue - totalInvested;
-  const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
-
-  if (fundPortfolio.length === 0) {
-    return (
-      <div className="card">
-        <div className="card-body">
-          <div className="empty" style={{ padding: '60px 20px' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
-            <h3 style={{ marginBottom: 8 }}>No Portfolio Companies Yet</h3>
-            <p style={{ color: 'var(--ink-muted)', marginBottom: 20 }}>
-              Add portfolio companies on the main Portfolio page and assign financing rounds to {fundName}.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {/* Fund Portfolio Stats */}
-      <div className="stats-row" style={{ marginBottom: 22 }}>
-        <StatCard label="Total Invested" value={fmtMoney(totalInvested, true)} sub={`${fundPortfolio.length} companies`} />
-        <StatCard label="Portfolio Value" value={fmtMoney(totalValue, true)} sub="Current marks" gold />
-        <StatCard label="Blended MOIC" value={`${blendedMOIC}x`} sub="Multiple on invested capital" />
-        <StatCard label="Unrealized Gain" value={fmtMoney(totalGainLoss, true)} sub={totalGainLoss >= 0 ? "Gain" : "Loss"} />
-      </div>
-
-      {/* Portfolio Table */}
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">{fundName} Portfolio</span>
-        </div>
-        
-        <div style={{ background: 'var(--gold-light)', padding: '10px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--gold-dark)' }}>
-          <strong>💡 Auto-calculations:</strong> Shares = Investment ÷ Cost/Share  •  Value = Shares × FMV/Share  •  FMV syncs from latest round
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ minWidth: 1000 }}>
-            <thead>
-              <tr>
-                <th style={{ width: 220 }}>Company / Asset</th>
-                <th>Sector</th>
-                <th>Inv. Date</th>
-                <th style={{ textAlign: "right" }}>Shares</th>
-                <th style={{ textAlign: "right" }}>Invested</th>
-                <th style={{ textAlign: "right" }}>Value</th>
-                <th style={{ textAlign: "right" }}>Gain / Loss</th>
-                <th style={{ textAlign: "right" }}>Cost / Sh.</th>
-                <th style={{ textAlign: "right" }}>FMV / Sh.</th>
-                <th style={{ textAlign: "right" }}>MOIC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {fundPortfolio.map((comp, compIdx) => {
-                const latestRound = comp.financings[comp.financings.length - 1];
-                const syncedFMV = latestRound?.costPerShare || 0;
-                
-                const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
-                const compValue = comp.financings.reduce((s, f) => {
-                  const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
-                  const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
-                  return s + (shares * fmv);
-                }, 0);
-                const compGL = compValue - compInvested;
-                const compMOIC = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
-                const isOpen = expanded[comp.company];
-
-                return [
-                  /* Company summary row */
-                  <tr key={comp.company + "_header"}
-                    onClick={() => toggleExpand(comp.company)}
-                    style={{ background: "#faf9f6", cursor: "pointer", borderTop: "2px solid var(--border)" }}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{
-                          display: "inline-block", width: 16, height: 16, lineHeight: "16px",
-                          textAlign: "center", fontSize: 10, color: "var(--gold-dark)",
-                          transition: "transform 0.2s",
-                          transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
-                        }}>▶</span>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{comp.company}</div>
-                          <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td><span className="badge-blue stat-badge">{comp.sector}</span></td>
-                    <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
-                    <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
-                    <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right" }}>
-                      <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
-                    </td>
-                  </tr>,
-
-                  /* Financing rows (expanded) */
-                  ...(isOpen ? comp.financings.map((fin, finIdx) => {
-                    const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
-                    const calculatedShares = fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares;
-                    const calculatedValue = calculatedShares * displayFMV;
-                    const gl = calculatedValue - fin.invested;
-                    const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
-                    
-                    return (
-                      <tr key={fin.id} style={{ background: "#fff" }}>
-                        <td style={{ paddingLeft: 44 }}>
-                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
-                        </td>
-                        <td></td>
-                        <td style={{ fontSize: 12 }}>{fin.date}</td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: "var(--ink-muted)" }}>
-                          {calculatedShares.toLocaleString()}
-                        </td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>{fmtMoney(fin.invested)}</td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
-                          {fmtMoney(calculatedValue)}
-                        </td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {fin.costPerShare > 0 ? `$${fin.costPerShare.toFixed(2)}` : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
-                        </td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {displayFMV > 0 ? (
-                            <span style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
-                              ${displayFMV.toFixed(2)}
-                            </span>
-                          ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
-                        </td>
-                        <td style={{ textAlign: "right" }}>
-                          <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
-                        </td>
-                      </tr>
-                    );
-                  }) : [])
-                ];
-              })}
-
-              {/* Grand totals row */}
-              <tr style={{ background: "var(--ink)", color: "#fff", borderTop: "2px solid var(--border)" }}>
-                <td colSpan={4} style={{ fontWeight: 600, fontSize: 13, color: "#fff", paddingLeft: 18 }}>Fund Total</td>
-                <td style={{ textAlign: "right", fontWeight: 700, color: "var(--gold-light)" }}>{fmtMoney(totalInvested)}</td>
-                <td style={{ textAlign: "right", fontWeight: 700, color: totalValue >= totalInvested ? "#a8f0c6" : "#f0a8a8" }}>{fmtMoney(totalValue)}</td>
-                <td style={{ textAlign: "right", fontWeight: 700, color: totalGainLoss >= 0 ? "#a8f0c6" : "#f0a8a8" }}>{totalGainLoss >= 0 ? "+" : ""}{fmtMoney(totalGainLoss)}</td>
-                <td colSpan={2}></td>
-                <td style={{ textAlign: "right" }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: "var(--gold-light)" }}>{blendedMOIC}x</span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Add LP to Fund Modal ──
 function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
-  const [allLPs, setAllLPs] = useState([]);
-  const [selectedLPId, setSelectedLPId] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
   const [form, setForm] = useState({
     stage: 'outreach',
-    commitment: 0
+    commitment: 0,
+    funded: 0,
+    nav: 0
   });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadAllLPs();
-  }, []);
-
-  const loadAllLPs = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('lps')
-        .select('*')
-        .is('fund', null) // Only LPs not yet assigned to a fund
-        .order('name');
-
-      if (error) throw error;
-      setAllLPs(data || []);
-    } catch (error) {
-      console.error('Error loading LPs:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSave = async () => {
-    if (!selectedLPId) {
-      alert('Please select an LP');
+    if (!selectedContactId) {
+      alert('Please select an LP contact');
       return;
     }
 
     try {
-      // Update the LP record with fund assignment
+      // Get fund ID
+      const { data: fundData } = await supabase
+        .from('funds')
+        .select('id')
+        .eq('name', fundName)
+        .single();
+
+      if (!fundData) throw new Error('Fund not found');
+
+      // Create investment record
       const { error } = await supabase
         .from('lps')
-        .update({
-          fund: fundName,
+        .insert([{
+          fund_id: fundData.id,
+          parent_lp_id: selectedContactId,
+          is_contact_record: false,
           stage: form.stage,
-          commitment: form.commitment
-        })
-        .eq('id', selectedLPId);
+          commitment: form.commitment,
+          funded: form.funded,
+          nav: form.nav,
+          // Copy contact info for display purposes (denormalized)
+          name: contacts.find(c => c.id === selectedContactId)?.name || '',
+          firm: contacts.find(c => c.id === selectedContactId)?.firm || '',
+          email: contacts.find(c => c.id === selectedContactId)?.email || '',
+          phone: contacts.find(c => c.id === selectedContactId)?.phone || '',
+          partner: contacts.find(c => c.id === selectedContactId)?.partner || ''
+        }]);
 
       if (error) throw error;
 
@@ -3497,7 +2752,7 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
     }
   };
 
-  const selectedLP = allLPs.find(lp => lp.id === selectedLPId);
+  const selectedContact = contacts.find(c => c.id === selectedContactId);
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -3507,66 +2762,71 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
           <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="drawer-body">
-          {loading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: 'var(--ink-muted)' }}>
-              Loading LPs...
+          <div className="form-grid">
+            <div className="field span2">
+              <label>Select LP Contact *</label>
+              <select 
+                value={selectedContactId} 
+                onChange={e => setSelectedContactId(e.target.value)}
+                style={{ fontSize: 14 }}
+              >
+                <option value="">Choose from LP Directory...</option>
+                {contacts.map(contact => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name} ({contact.firm})
+                  </option>
+                ))}
+              </select>
+              {selectedContact && (
+                <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
+                  {selectedContact.email} · Partner: {selectedContact.partner}
+                </div>
+              )}
             </div>
-          ) : allLPs.length === 0 ? (
-            <div className="empty" style={{ padding: '30px 20px' }}>
-              <p>No LPs available to add</p>
-              <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 8 }}>
-                Add LPs to your directory first
-              </p>
-            </div>
-          ) : (
-            <div className="form-grid">
-              <div className="field span2">
-                <label>Select LP *</label>
-                <select 
-                  value={selectedLPId} 
-                  onChange={e => setSelectedLPId(e.target.value)}
-                  style={{ fontSize: 14 }}
-                >
-                  <option value="">Choose from LP Directory...</option>
-                  {allLPs.map(lp => (
-                    <option key={lp.id} value={lp.id}>
-                      {lp.firm} - {lp.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedLP && (
-                  <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
-                    {selectedLP.email} {selectedLP.phone && `· ${selectedLP.phone}`}
-                  </div>
-                )}
-              </div>
 
-              <div className="field">
-                <label>Stage</label>
-                <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
-                  {STAGES.map(s => (
-                    <option key={s.id} value={s.id}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field">
-                <label>Commitment ($)</label>
-                <input
-                  type="number"
-                  value={form.commitment}
-                  onChange={e => setForm({ ...form, commitment: parseFloat(e.target.value) || 0 })}
-                  placeholder="5000000"
-                />
-              </div>
+            <div className="field">
+              <label>Stage</label>
+              <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
+                {STAGES.map(s => (
+                  <option key={s.id} value={s.id}>{s.label}</option>
+                ))}
+              </select>
             </div>
-          )}
+
+            <div className="field">
+              <label>Commitment ($)</label>
+              <input
+                type="number"
+                value={form.commitment}
+                onChange={e => setForm({ ...form, commitment: parseFloat(e.target.value) || 0 })}
+                placeholder="5000000"
+              />
+            </div>
+
+            <div className="field">
+              <label>Funded ($)</label>
+              <input
+                type="number"
+                value={form.funded}
+                onChange={e => setForm({ ...form, funded: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+              />
+            </div>
+
+            <div className="field">
+              <label>NAV ($)</label>
+              <input
+                type="number"
+                value={form.nav}
+                onChange={e => setForm({ ...form, nav: parseFloat(e.target.value) || 0 })}
+                placeholder="0"
+              />
+            </div>
+          </div>
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={!selectedLPId}>
-            Add to Fund
-          </button>
+          <button className="btn btn-primary" onClick={handleSave}>Add to Fund</button>
         </div>
       </div>
     </div>
