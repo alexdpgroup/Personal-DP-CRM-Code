@@ -1516,9 +1516,9 @@ function PortfolioPage({ fundDefs }) {
 
       // Load all financings
       const { data: financings, error: finError } = await supabase
-        .from('financings')
+        .from('portfolio_financings')
         .select('*')
-        .order('date');
+        .order('investment_date');
       
       if (finError) throw finError;
 
@@ -1532,11 +1532,11 @@ function PortfolioPage({ fundDefs }) {
           .filter(f => f.company_id === comp.id)
           .map(f => ({
             id: f.id,
-            asset: f.asset,
+            asset: f.asset_type,
             fund: f.fund,
-            date: f.date,
-            invested: parseFloat(f.invested),
-            shares: parseInt(f.shares),
+            date: f.investment_date,
+            invested: parseFloat(f.invested) || 0,
+            shares: parseInt(f.shares) || 0,
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
             isManualShares: f.is_manual_shares,
@@ -1597,18 +1597,18 @@ function PortfolioPage({ fundDefs }) {
     try {
       // Map field names to database columns
       const fieldMap = {
-        date: 'date',
+        date: 'investment_date',
         invested: 'invested',
         costPerShare: 'cost_per_share',
         fmvPerShare: 'fmv_per_share',
         fund: 'fund',
-        asset: 'asset',
+        asset: 'asset_type',
         shares: 'shares'
       };
       
       const dbField = fieldMap[field] || field;
       const { error } = await supabase
-        .from('financings')
+        .from('portfolio_financings')
         .update({ [dbField]: isNaN(+val) ? val : +val })
         .eq('id', fin.id);
       
@@ -1634,7 +1634,7 @@ function PortfolioPage({ fundDefs }) {
     
     try {
       const { error } = await supabase
-        .from('financings')
+        .from('portfolio_financings')
         .delete()
         .eq('id', fin.id);
       
@@ -1708,16 +1708,17 @@ function PortfolioPage({ fundDefs }) {
       
       // Insert financing
       const { data: newFin, error } = await supabase
-        .from('financings')
+        .from('portfolio_financings')
         .insert({
           company_id: company.companyId,
-          asset: fin.asset,
+          asset_type: fin.asset,
           fund: fin.fund,
-          date: fin.date,
+          investment_date: fin.date,
           invested: fin.invested,
-          shares: fin.shares,
+          shares: fin.shares || 0,
           cost_per_share: fin.costPerShare || 0,
           fmv_per_share: fin.fmvPerShare || 0,
+          current_value: 0,
           is_manual_shares: fin.isManualShares || false
         })
         .select()
@@ -1730,11 +1731,11 @@ function PortfolioPage({ fundDefs }) {
         ...c, 
         financings: [...c.financings, {
           id: newFin.id,
-          asset: newFin.asset,
+          asset: newFin.asset_type,
           fund: newFin.fund,
-          date: newFin.date,
-          invested: parseFloat(newFin.invested),
-          shares: parseInt(newFin.shares),
+          date: newFin.investment_date,
+          invested: parseFloat(newFin.invested) || 0,
+          shares: parseInt(newFin.shares) || 0,
           costPerShare: parseFloat(newFin.cost_per_share) || 0,
           fmvPerShare: parseFloat(newFin.fmv_per_share) || 0,
           isManualShares: newFin.is_manual_shares,
@@ -1962,7 +1963,7 @@ function PortfolioPage({ fundDefs }) {
                             {isNum && field !== "costPerShare" && field !== "fmvPerShare" && field !== "shares" 
                               ? fmtMoney(fin[field]) 
                               : field === "shares" 
-                                ? fin[field].toLocaleString() 
+                                ? (fin[field] || 0).toLocaleString() 
                                 : fin[field]}
                           </span>
                     );
