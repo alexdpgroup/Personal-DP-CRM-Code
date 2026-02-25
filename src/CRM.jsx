@@ -3188,6 +3188,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
   const nav = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
+  const fundPortfolioCount = portfolio.filter(comp => comp.financings.some(f => f.fund === fundName)).length;
   const shortName = fundName.replace("Decisive Point ", "");
 
   // pipeline by stage
@@ -3304,7 +3305,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             transition: 'all 0.2s'
           }}
         >
-          Portfolio ({portfolio.length})
+          Portfolio ({fundPortfolioCount})
         </button>
       </div>
 
