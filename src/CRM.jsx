@@ -1516,10 +1516,10 @@ function PortfolioPage({ fundDefs }) {
 
       // Load all financings
       const { data: financings, error: finError } = await supabase
-        .from('portfolio_financings')
+        .from('financings')
         .select('*')
-        .order('investment_date');
-      
+        .order('date');
+
       if (finError) throw finError;
 
       // Combine into schedule format
@@ -1533,9 +1533,9 @@ function PortfolioPage({ fundDefs }) {
           .filter(f => f.company_id === comp.id)
           .map(f => ({
             id: f.id,
-            asset: f.asset_type,
-            fund: f.fund_name || comp.fund_name || '',
-            date: f.investment_date,
+            asset: f.asset,
+            fund: f.fund || '',
+            date: f.date,
             invested: parseFloat(f.invested) || 0,
             shares: parseInt(f.shares) || 0,
             costPerShare: parseFloat(f.cost_per_share) || 0,
@@ -1595,17 +1595,17 @@ function PortfolioPage({ fundDefs }) {
     try {
       // Map field names to database columns
       const fieldMap = {
-        date: 'investment_date',
+        date: 'date',
         invested: 'invested',
         costPerShare: 'cost_per_share',
         fmvPerShare: 'fmv_per_share',
-        asset: 'asset_type',
+        asset: 'asset',
         shares: 'shares'
       };
-      
+
       const dbField = fieldMap[field] || field;
       const { error } = await supabase
-        .from('portfolio_financings')
+        .from('financings')
         .update({ [dbField]: isNaN(+val) ? val : +val })
         .eq('id', fin.id);
       
@@ -1631,12 +1631,12 @@ function PortfolioPage({ fundDefs }) {
     
     try {
       const { error } = await supabase
-        .from('portfolio_financings')
+        .from('financings')
         .delete()
         .eq('id', fin.id);
-      
+
       if (error) throw error;
-      
+
       // Update local state
       const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
         ...c,
@@ -1705,36 +1705,36 @@ function PortfolioPage({ fundDefs }) {
       
       // Insert financing
       const { data: newFin, error } = await supabase
-        .from('portfolio_financings')
+        .from('financings')
         .insert({
           company_id: company.companyId,
-          asset_type: fin.asset,
-          investment_date: fin.date,
+          asset: fin.asset,
+          fund: company.fund || '',
+          date: fin.date,
           invested: fin.invested,
           shares: fin.shares || 0,
           cost_per_share: fin.costPerShare || 0,
-          fmv_per_share: fin.fmvPerShare || 0,
-          current_value: 0
+          fmv_per_share: fin.fmvPerShare || 0
         })
         .select()
         .single();
-      
+
       if (error) throw error;
-      
+
       // Update local state - inherit fund from company
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { 
-        ...c, 
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+        ...c,
         financings: [...c.financings, {
           id: newFin.id,
-          asset: newFin.asset_type,
-          fund: company.fund, // Inherit from company, not from financing record
-          date: newFin.investment_date,
+          asset: newFin.asset,
+          fund: newFin.fund || company.fund || '',
+          date: newFin.date,
           invested: parseFloat(newFin.invested) || 0,
           shares: parseInt(newFin.shares) || 0,
           costPerShare: parseFloat(newFin.cost_per_share) || 0,
           fmvPerShare: parseFloat(newFin.fmv_per_share) || 0,
           value: 0
-        }] 
+        }]
       });
       console.log('📊 Updated schedule:', updated);
       setSchedule(updated);
@@ -2885,10 +2885,10 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
 
       // Load all financings
       const { data: financings, error: finError } = await supabase
-        .from('portfolio_financings')
+        .from('financings')
         .select('*')
-        .order('investment_date');
-
+        .order('date');
+      
       if (finError) throw finError;
 
       // Combine into schedule format
@@ -2901,11 +2901,11 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           .filter(f => f.company_id === comp.id)
           .map(f => ({
             id: f.id,
-            asset: f.asset_type,
-            fund: f.fund_name || comp.fund_name || '',
-            date: f.investment_date,
-            invested: parseFloat(f.invested) || 0,
-            shares: parseInt(f.shares) || 0,
+            asset: f.asset,
+            fund: f.fund,
+            date: f.date,
+            invested: parseFloat(f.invested),
+            shares: parseInt(f.shares),
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
             value: 0
