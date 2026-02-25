@@ -3221,24 +3221,38 @@ function FundPortfolioTab({ portfolio, fundName }) {
   
   // Filter companies to only show those with at least one financing from this fund
   // And within each company, only show financings from this fund
+  // Keep allFinancings so we can compute company-level FMV (same logic as Portfolio page)
   const fundPortfolio = portfolio
     .map(comp => ({
       ...comp,
+      allFinancings: comp.financings, // All company financings for FMV calculation
       financings: comp.financings.filter(f => f.fund === fundName)
     }))
     .filter(comp => comp.financings.length > 0);
-  
+
+  // Helper: compute company-level synced FMV using same logic as Portfolio page
+  // Priority: manual override > most recent by date > last entered
+  const getCompanySyncedFMV = (comp) => {
+    if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
+      return comp.manualFMV;
+    }
+    if (comp.allFinancings.length > 0) {
+      const sortedByDate = [...comp.allFinancings].sort((a, b) => new Date(b.date) - new Date(a.date));
+      return sortedByDate[0]?.costPerShare || 0;
+    }
+    return 0;
+  };
+
   // Calculate fund-level totals (only from this fund's financings)
   const totalInvested = fundPortfolio.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => s + f.invested, 0);
   }, 0);
-  
+
   const totalValue = fundPortfolio.reduce((total, comp) => {
-    const latestRound = comp.financings[comp.financings.length - 1];
-    const syncedFMV = latestRound?.costPerShare || 0;
-    
+    const syncedFMV = getCompanySyncedFMV(comp);
+
     return total + comp.financings.reduce((s, f) => {
-      const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
@@ -3280,7 +3294,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
         </div>
         
         <div style={{ background: 'var(--gold-light)', padding: '10px 18px', borderBottom: '1px solid var(--border)', fontSize: 12, color: 'var(--gold-dark)' }}>
-          <strong>💡 Auto-calculations:</strong> Shares = Investment ÷ Cost/Share  •  Value = Shares × FMV/Share  •  FMV syncs from latest round
+          <strong>💡 Auto-calculations:</strong> Shares = Investment ÷ Cost/Share  •  Value = Shares × FMV/Share  •  FMV syncs from Portfolio page (manual override or latest round)
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -3301,12 +3315,11 @@ function FundPortfolioTab({ portfolio, fundName }) {
             </thead>
             <tbody>
               {fundPortfolio.map((comp, compIdx) => {
-                const latestRound = comp.financings[comp.financings.length - 1];
-                const syncedFMV = latestRound?.costPerShare || 0;
-                
+                const syncedFMV = getCompanySyncedFMV(comp);
+
                 const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
                 const compValue = comp.financings.reduce((s, f) => {
-                  const shares = f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : f.shares;
+                  const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
@@ -3349,11 +3362,11 @@ function FundPortfolioTab({ portfolio, fundName }) {
                   /* Financing rows (expanded) */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
-                    const calculatedShares = fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : fin.shares;
+                    const calculatedShares = fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0);
                     const calculatedValue = calculatedShares * displayFMV;
                     const gl = calculatedValue - fin.invested;
                     const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
-                    
+
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
@@ -3374,7 +3387,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
                           {displayFMV > 0 ? (
-                            <span style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
+                            <span style={{ color: comp.manualFMV !== undefined && comp.manualFMV !== null ? "var(--gold-dark)" : finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
                               ${displayFMV.toFixed(2)}
                             </span>
                           ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
