@@ -1506,10 +1506,10 @@ function PortfolioPage({ fundDefs }) {
 
   const loadPortfolioFromSupabase = async () => {
     try {
-      // Load companies with fund info
+      // Load companies
       const { data: companies, error: compError } = await supabase
         .from('portfolio_companies')
-        .select('*, fund:funds(name)')
+        .select('*')
         .order('company_name');
       
       if (compError) throw compError;
@@ -1527,14 +1527,14 @@ function PortfolioPage({ fundDefs }) {
         company: comp.company_name,
         companyId: comp.id, // Store the database ID
         sector: comp.sector,
-        fund: comp.fund?.name || '', // Get fund name from relationship
+        fund: comp.fund_name || '',
         manualFMV: comp.manual_fmv,
         financings: (financings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
             id: f.id,
             asset: f.asset_type,
-            fund: comp.fund?.name || '', // Inherit fund from company
+            fund: f.fund_name || comp.fund_name || '',
             date: f.investment_date,
             invested: parseFloat(f.invested) || 0,
             shares: parseInt(f.shares) || 0,
@@ -1915,6 +1915,8 @@ function PortfolioPage({ fundDefs }) {
 
                   /* ── Financing rows (expanded) ── */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
+                    // Get latest round for tooltip reference
+                    const latestRound = comp.financings[comp.financings.length - 1];
                     // Use same FMV logic
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
                     
