@@ -1493,6 +1493,8 @@ function PortfolioPage({ fundDefs }) {
   const [showAddCompany, setShowAddCompany] = useState(false);
   const [addFinancingFor, setAddFinancingFor] = useState(null);
   const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
+  const [editCompanyIdx, setEditCompanyIdx] = useState(null); // index into schedule for editing company
+  const [editFinancing, setEditFinancing] = useState(null); // {compIdx, finIdx} for editing financing
 
   // Get fund names from fundDefs, or fall back to FUNDS constant
   const fundNames = fundDefs?.map(f => f.name) || FUNDS;
@@ -1693,6 +1695,71 @@ function PortfolioPage({ fundDefs }) {
     } catch (error) {
       console.error('❌ Error updating FMV:', error);
       alert('Error updating FMV');
+    }
+  };
+
+  const updateCompany = async (compIdx, updates) => {
+    const company = schedule[compIdx];
+    try {
+      if (company.companyId) {
+        const { error } = await supabase
+          .from('portfolio_companies')
+          .update({
+            company_name: updates.company,
+            sector: updates.sector
+          })
+          .eq('id', company.companyId);
+        if (error) throw error;
+      }
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+        ...c,
+        company: updates.company,
+        sector: updates.sector
+      });
+      setSchedule(updated);
+      setEditCompanyIdx(null);
+    } catch (error) {
+      console.error('❌ Error updating company:', error);
+      alert('Error updating company');
+    }
+  };
+
+  const updateFinancingFull = async (compIdx, finIdx, updates) => {
+    const comp = schedule[compIdx];
+    const fin = comp.financings[finIdx];
+    try {
+      const { error } = await supabase
+        .from('financings')
+        .update({
+          asset: updates.asset,
+          fund: updates.fund,
+          date: updates.date,
+          invested: updates.invested,
+          shares: updates.shares || 0,
+          cost_per_share: updates.costPerShare || 0,
+          fmv_per_share: updates.fmvPerShare || 0
+        })
+        .eq('id', fin.id);
+      if (error) throw error;
+
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+        ...c,
+        financings: c.financings.map((f, fi) => fi !== finIdx ? f : {
+          ...f,
+          asset: updates.asset,
+          fund: updates.fund,
+          date: updates.date,
+          invested: updates.invested,
+          shares: updates.shares || 0,
+          costPerShare: updates.costPerShare || 0,
+          fmvPerShare: updates.fmvPerShare || 0
+        })
+      });
+      setSchedule(updated);
+      setEditFinancing(null);
+    } catch (error) {
+      console.error('❌ Error updating financing:', error);
+      alert('Error updating financing');
     }
   };
 
@@ -1903,6 +1970,9 @@ function PortfolioPage({ fundDefs }) {
                     </td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditCompanyIdx(compIdx)} title="Edit company">
+                          <Icon name="edit" size={12} />
+                        </button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
                           <Icon name="plus" size={12} />
                         </button>
@@ -2000,14 +2070,24 @@ function PortfolioPage({ fundDefs }) {
                           <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
                         </td>
                         <td>
-                          <button 
-                            className="btn btn-ghost btn-sm" 
-                            onClick={() => deleteFinancing(compIdx, finIdx)} 
-                            title="Delete this round"
-                            style={{ color: 'var(--red)', padding: '2px 4px' }}
-                          >
-                            <Icon name="close" size={10} />
-                          </button>
+                          <div style={{ display: 'flex', gap: 2 }}>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setEditFinancing({ compIdx, finIdx })}
+                              title="Edit this round"
+                              style={{ padding: '2px 4px' }}
+                            >
+                              <Icon name="edit" size={10} />
+                            </button>
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => deleteFinancing(compIdx, finIdx)}
+                              title="Delete this round"
+                              style={{ color: 'var(--red)', padding: '2px 4px' }}
+                            >
+                              <Icon name="close" size={10} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -2047,6 +2127,26 @@ function PortfolioPage({ fundDefs }) {
         <AddCompanyModal
           onClose={() => setShowAddCompany(false)}
           onSave={addCompany}
+        />
+      )}
+
+      {/* Edit Company Modal */}
+      {editCompanyIdx !== null && (
+        <EditCompanyModal
+          company={schedule[editCompanyIdx]}
+          onClose={() => setEditCompanyIdx(null)}
+          onSave={(updates) => updateCompany(editCompanyIdx, updates)}
+        />
+      )}
+
+      {/* Edit Financing Modal */}
+      {editFinancing !== null && (
+        <EditFinancingModal
+          company={schedule[editFinancing.compIdx]?.company}
+          financing={schedule[editFinancing.compIdx]?.financings[editFinancing.finIdx]}
+          fundNames={fundNames}
+          onClose={() => setEditFinancing(null)}
+          onSave={(updates) => updateFinancingFull(editFinancing.compIdx, editFinancing.finIdx, updates)}
         />
       )}
     </div>
@@ -2213,6 +2313,164 @@ function AddCompanyModal({ onClose, onSave }) {
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={() => { if (form.company) onSave(form); }}>Add Company</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditCompanyModal({ company, onClose, onSave }) {
+  const [form, setForm] = useState({ company: company.company, sector: company.sector || "" });
+  const f = k => e => setForm({ ...form, [k]: e.target.value });
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Edit Company</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2"><label>Company Name</label><input value={form.company} onChange={f("company")} placeholder="Acme Corp" /></div>
+            <div className="field span2"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => { if (form.company) onSave(form); }}>Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) {
+  const [form, setForm] = useState({
+    asset: financing.asset || "SAFE",
+    fund: financing.fund || "",
+    date: financing.date || "",
+    invested: financing.invested || 0,
+    costPerShare: financing.costPerShare || 0,
+    manualShares: financing.shares || 0
+  });
+  const [useManualShares, setUseManualShares] = useState(
+    financing.shares > 0 && financing.costPerShare > 0 && financing.shares !== Math.round(financing.invested / financing.costPerShare)
+  );
+
+  const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
+  const finalShares = useManualShares ? form.manualShares : calculatedShares;
+
+  const handleSave = () => {
+    if (!form.date || !form.invested) {
+      alert('Please fill in Date and Investment Amount');
+      return;
+    }
+    if (!useManualShares && !form.costPerShare) {
+      alert('Please enter Cost per Share or toggle to manual shares entry');
+      return;
+    }
+    if (useManualShares && !form.manualShares) {
+      alert('Please enter number of shares');
+      return;
+    }
+    onSave({
+      ...form,
+      shares: finalShares,
+      fmvPerShare: form.costPerShare || 0
+    });
+  };
+
+  const f = k => e => setForm({ ...form, [k]: e.target.value });
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-title">Edit Financing Round</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 3 }}>{company}</div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field"><label>Asset / Round</label>
+              <select value={form.asset} onChange={f("asset")}>
+                {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Fund</label>
+              <select value={form.fund} onChange={f("fund")}>
+                <option value="">— No fund —</option>
+                {fundNames.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
+            <div className="field"><label>Investment Amount ($) *</label>
+              <input
+                type="number"
+                value={form.invested}
+                onChange={e => setForm({...form, invested: +e.target.value})}
+                placeholder="1000000"
+              />
+            </div>
+
+            <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={useManualShares}
+                  onChange={e => setUseManualShares(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry (for SAFEs, convertible notes, etc.)</span>
+              </label>
+            </div>
+
+            {!useManualShares ? (
+              <>
+                <div className="field"><label>Cost per Share ($) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.costPerShare}
+                    onChange={e => setForm({...form, costPerShare: +e.target.value})}
+                    placeholder="5.00"
+                  />
+                </div>
+                <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
+                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
+                    {calculatedShares.toLocaleString()}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="field"><label>Number of Shares *</label>
+                  <input
+                    type="number"
+                    value={form.manualShares}
+                    onChange={e => setForm({...form, manualShares: +e.target.value})}
+                    placeholder="200000"
+                  />
+                </div>
+                <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.costPerShare}
+                    onChange={e => setForm({...form, costPerShare: +e.target.value})}
+                    placeholder="0.00"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
         </div>
       </div>
     </div>
