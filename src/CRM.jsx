@@ -2885,10 +2885,10 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
 
       // Load all financings
       const { data: financings, error: finError } = await supabase
-        .from('financings')
+        .from('portfolio_financings')
         .select('*')
-        .order('date');
-      
+        .order('investment_date');
+
       if (finError) throw finError;
 
       // Combine into schedule format
@@ -2901,11 +2901,11 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           .filter(f => f.company_id === comp.id)
           .map(f => ({
             id: f.id,
-            asset: f.asset,
-            fund: f.fund,
-            date: f.date,
-            invested: parseFloat(f.invested),
-            shares: parseInt(f.shares),
+            asset: f.asset_type,
+            fund: f.fund_name || comp.fund_name || '',
+            date: f.investment_date,
+            invested: parseFloat(f.invested) || 0,
+            shares: parseInt(f.shares) || 0,
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
             value: 0
