@@ -1542,6 +1542,7 @@ function PortfolioPage({ fundDefs }) {
             shares: parseInt(f.shares) || 0,
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
+            converted: f.converted !== undefined ? f.converted : true,
             value: 0 // Calculated on the fly
           }))
       }));
@@ -1578,15 +1579,18 @@ function PortfolioPage({ fundDefs }) {
       const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
       syncedFMV = sortedByDate[0]?.costPerShare || 0;
     }
-    
+
     return total + comp.financings.reduce((s, f) => {
+      // Unconverted SAFEs/Notes: value = invested amount
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
       // Auto-calculate shares if not provided: invested / cost_per_share
       const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
   }, 0);
-  
+
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
@@ -1602,7 +1606,8 @@ function PortfolioPage({ fundDefs }) {
         costPerShare: 'cost_per_share',
         fmvPerShare: 'fmv_per_share',
         asset: 'asset',
-        shares: 'shares'
+        shares: 'shares',
+        converted: 'converted'
       };
 
       const dbField = fieldMap[field] || field;
@@ -1737,7 +1742,8 @@ function PortfolioPage({ fundDefs }) {
           invested: updates.invested,
           shares: updates.shares || 0,
           cost_per_share: updates.costPerShare || 0,
-          fmv_per_share: updates.fmvPerShare || 0
+          fmv_per_share: updates.fmvPerShare || 0,
+          converted: updates.converted !== undefined ? updates.converted : true
         })
         .eq('id', fin.id);
       if (error) throw error;
@@ -1752,7 +1758,8 @@ function PortfolioPage({ fundDefs }) {
           invested: updates.invested,
           shares: updates.shares || 0,
           costPerShare: updates.costPerShare || 0,
-          fmvPerShare: updates.fmvPerShare || 0
+          fmvPerShare: updates.fmvPerShare || 0,
+          converted: updates.converted !== undefined ? updates.converted : true
         })
       });
       setSchedule(updated);
@@ -1781,7 +1788,8 @@ function PortfolioPage({ fundDefs }) {
           invested: fin.invested,
           shares: fin.shares || 0,
           cost_per_share: fin.costPerShare || 0,
-          fmv_per_share: fin.fmvPerShare || 0
+          fmv_per_share: fin.fmvPerShare || 0,
+          converted: fin.converted !== undefined ? fin.converted : true
         })
         .select()
         .single();
@@ -1800,6 +1808,7 @@ function PortfolioPage({ fundDefs }) {
           shares: parseInt(newFin.shares) || 0,
           costPerShare: parseFloat(newFin.cost_per_share) || 0,
           fmvPerShare: parseFloat(newFin.fmv_per_share) || 0,
+          converted: newFin.converted !== undefined ? newFin.converted : true,
           value: 0
         }]
       });
@@ -1900,6 +1909,8 @@ function PortfolioPage({ fundDefs }) {
                 
                 const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
                 const compValue = comp.financings.reduce((s, f) => {
+                  const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+                  if (isUnconverted) return s + f.invested;
                   const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
@@ -1907,7 +1918,7 @@ function PortfolioPage({ fundDefs }) {
                 const compGL       = compValue - compInvested;
                 const compMOIC     = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
                 const isOpen       = expanded[comp.company];
-                
+
                 // Get unique funds across all financings
                 const fundsInvested = [...new Set(comp.financings.map(f => f.fund).filter(Boolean))];
                 const fundDisplay = fundsInvested.length === 1 
@@ -1989,13 +2000,16 @@ function PortfolioPage({ fundDefs }) {
                     const latestRound = comp.financings[comp.financings.length - 1];
                     // Use same FMV logic
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
-                    
+
+                    // Check if this is an unconverted SAFE/Note
+                    const isUnconverted = (fin.asset === "SAFE" || fin.asset === "Convertible Note") && fin.converted === false;
+
                     // Auto-calculate shares if not provided
-                    const calculatedShares = fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0);
-                    
-                    // Auto-calculate current value from shares * FMV
-                    const calculatedValue = calculatedShares * displayFMV;
-                    
+                    const calculatedShares = isUnconverted ? 0 : (fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0));
+
+                    // For unconverted SAFEs/Notes, value = invested; otherwise shares * FMV
+                    const calculatedValue = isUnconverted ? fin.invested : (calculatedShares * displayFMV);
+
                     // Calculate gain/loss and MOIC from auto-calculated value
                     const gl = calculatedValue - fin.invested;
                     const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
@@ -2032,7 +2046,12 @@ function PortfolioPage({ fundDefs }) {
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
-                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
+                            {isUnconverted && (
+                              <span style={{ fontSize: 9, background: "#fff3cd", color: "#856404", borderRadius: 4, padding: "1px 5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Unconverted</span>
+                            )}
+                          </div>
                         </td>
                         <td></td>
                         <td style={{ fontSize: 12, color: "var(--ink-muted)" }}>
@@ -2047,24 +2066,33 @@ function PortfolioPage({ fundDefs }) {
                           }
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          <span style={{ color: "var(--ink-muted)" }} title="Auto-calculated: Investment ÷ Cost/Share">
-                            {calculatedShares.toLocaleString()}
-                          </span>
+                          {isUnconverted
+                            ? <span style={{ color: "var(--ink-muted)" }}>—</span>
+                            : <span style={{ color: "var(--ink-muted)" }} title="Auto-calculated: Investment ÷ Cost/Share">
+                                {calculatedShares.toLocaleString()}
+                              </span>
+                          }
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}><EditableCell field="invested" /></td>
                         <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
-                          <span title="Auto-calculated: Shares × FMV/Share">{fmtMoney(calculatedValue)}</span>
+                          <span title={isUnconverted ? "Unconverted - value equals investment amount" : "Auto-calculated: Shares × FMV/Share"}>{fmtMoney(calculatedValue)}</span>
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {fin.costPerShare > 0 ? <EditableCell field="costPerShare" /> : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                          {isUnconverted
+                            ? <span style={{ color: "var(--ink-muted)" }}>—</span>
+                            : fin.costPerShare > 0 ? <EditableCell field="costPerShare" /> : <span style={{ color: "var(--ink-muted)" }}>N/A</span>
+                          }
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {displayFMV > 0 ? (
-                            <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round - sets FMV for all rounds"} style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
-                              ${displayFMV.toFixed(2)}
-                            </span>
-                          ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                          {isUnconverted
+                            ? <span style={{ color: "var(--ink-muted)" }}>—</span>
+                            : displayFMV > 0 ? (
+                              <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round - sets FMV for all rounds"} style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
+                                ${displayFMV.toFixed(2)}
+                              </span>
+                            ) : <span style={{ color: "var(--ink-muted)" }}>N/A</span>
+                          }
                         </td>
                         <td style={{ textAlign: "right" }}>
                           <span className={`stat-badge ${+moic >= 2 ? "badge-green" : +moic >= 1 ? "badge-gold" : "badge-red"}`}>{moic}x</span>
@@ -2154,46 +2182,55 @@ function PortfolioPage({ fundDefs }) {
 }
 
 function AddFinancingModal({ company, fundNames, onClose, onSave }) {
-  const [form, setForm] = useState({ 
-    asset: "SAFE", 
-    date: "", 
-    invested: 0, 
+  const [form, setForm] = useState({
+    asset: "SAFE",
+    date: "",
+    invested: 0,
     costPerShare: 0,
     manualShares: 0
   });
   const [useManualShares, setUseManualShares] = useState(false);
-  
+  const [converted, setConverted] = useState(true);
+
+  const isSafeOrNote = form.asset === "SAFE" || form.asset === "Convertible Note";
+  const isUnconverted = isSafeOrNote && !converted;
+
   // Auto-calculate shares when invested or costPerShare changes
   const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
-  const finalShares = useManualShares ? form.manualShares : calculatedShares;
-  
+  const finalShares = isUnconverted ? 0 : (useManualShares ? form.manualShares : calculatedShares);
+
   const handleSave = () => {
     if (!form.date || !form.invested) {
       alert('Please fill in Date and Investment Amount');
       return;
     }
-    
-    if (!useManualShares && !form.costPerShare) {
-      alert('Please enter Cost per Share or toggle to manual shares entry');
-      return;
+
+    // For unconverted SAFEs/Notes, only investment amount is needed
+    if (!isUnconverted) {
+      if (!useManualShares && !form.costPerShare) {
+        alert('Please enter Cost per Share or toggle to manual shares entry');
+        return;
+      }
+
+      if (useManualShares && !form.manualShares) {
+        alert('Please enter number of shares');
+        return;
+      }
     }
-    
-    if (useManualShares && !form.manualShares) {
-      alert('Please enter number of shares');
-      return;
-    }
-    
+
     // Save with calculated or manual shares
     onSave({
       ...form,
       shares: finalShares,
+      converted: isSafeOrNote ? converted : true,
       value: form.invested, // Initial value equals investment
-      fmvPerShare: form.costPerShare || 0 // FMV equals cost, or 0 for SAFEs
+      costPerShare: isUnconverted ? 0 : form.costPerShare,
+      fmvPerShare: isUnconverted ? 0 : (form.costPerShare || 0)
     });
   };
-  
+
   const f = k => e => setForm({ ...form, [k]: e.target.value });
-  
+
   return (
     <div className="overlay" onClick={onClose}>
       <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
@@ -2211,75 +2248,100 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
                 {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
               </select>
             </div>
+
+            {/* Converted toggle - only shown for SAFE / Convertible Note */}
+            {isSafeOrNote && (
+              <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={converted}
+                    onChange={e => setConverted(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>This {form.asset} has converted</span>
+                </label>
+              </div>
+            )}
+
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
             <div className="field"><label>Investment Amount ($) *</label>
-              <input 
-                type="number" 
-                value={form.invested} 
-                onChange={e => setForm({...form, invested: +e.target.value})} 
+              <input
+                type="number"
+                value={form.invested}
+                onChange={e => setForm({...form, invested: +e.target.value})}
                 placeholder="1000000"
               />
             </div>
-            
-            {/* Toggle for manual shares entry */}
-            <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
-                <input 
-                  type="checkbox" 
-                  checked={useManualShares} 
-                  onChange={e => setUseManualShares(e.target.checked)}
-                  style={{ width: 16, height: 16, cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry (for SAFEs, convertible notes, etc.)</span>
-              </label>
-            </div>
-            
-            {!useManualShares ? (
-              <>
-                <div className="field"><label>Cost per Share ($) *</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={form.costPerShare} 
-                    onChange={e => setForm({...form, costPerShare: +e.target.value})} 
-                    placeholder="5.00"
-                  />
-                </div>
-                <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
-                    {calculatedShares.toLocaleString()}
-                  </div>
-                </div>
-              </>
+
+            {/* If unconverted SAFE/Note, show info message instead of share fields */}
+            {isUnconverted ? (
+              <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
+                <strong>Unconverted {form.asset}:</strong> The investment amount will be used as both the invested amount and the current value until this {form.asset} converts. No share or cost-per-share information is required.
+              </div>
             ) : (
               <>
-                <div className="field"><label>Number of Shares *</label>
-                  <input 
-                    type="number" 
-                    value={form.manualShares} 
-                    onChange={e => setForm({...form, manualShares: +e.target.value})} 
-                    placeholder="200000"
-                  />
+                {/* Toggle for manual shares entry */}
+                <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={useManualShares}
+                      onChange={e => setUseManualShares(e.target.checked)}
+                      style={{ width: 16, height: 16, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry</span>
+                  </label>
                 </div>
-                <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    value={form.costPerShare} 
-                    onChange={e => setForm({...form, costPerShare: +e.target.value})} 
-                    placeholder="0.00"
-                  />
+
+                {!useManualShares ? (
+                  <>
+                    <div className="field"><label>Cost per Share ($) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={form.costPerShare}
+                        onChange={e => setForm({...form, costPerShare: +e.target.value})}
+                        placeholder="5.00"
+                      />
+                    </div>
+                    <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
+                        {calculatedShares.toLocaleString()}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="field"><label>Number of Shares *</label>
+                      <input
+                        type="number"
+                        value={form.manualShares}
+                        onChange={e => setForm({...form, manualShares: +e.target.value})}
+                        placeholder="200000"
+                      />
+                    </div>
+                    <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={form.costPerShare}
+                        onChange={e => setForm({...form, costPerShare: +e.target.value})}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
+                  <strong>Note:</strong> {useManualShares
+                    ? "Manual shares mode - enter exact share count."
+                    : "Auto-calculation mode - shares will be calculated from investment amount ÷ cost per share."
+                  }
                 </div>
               </>
             )}
-            
-            <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
-              <strong>Note:</strong> {useManualShares 
-                ? "Manual shares mode - enter exact share count. Use for unconverted SAFEs, convertible notes, or hardcoded amounts."
-                : "Auto-calculation mode - shares will be calculated from investment amount ÷ cost per share."
-              }
-            </div>
           </div>
         </div>
         <div className="drawer-footer">
@@ -2353,30 +2415,39 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
     costPerShare: financing.costPerShare || 0,
     manualShares: financing.shares || 0
   });
+  const isSafeOrNote = form.asset === "SAFE" || form.asset === "Convertible Note";
+  const [converted, setConverted] = useState(
+    financing.converted !== undefined ? financing.converted : true
+  );
+  const isUnconverted = isSafeOrNote && !converted;
   const [useManualShares, setUseManualShares] = useState(
     financing.shares > 0 && financing.costPerShare > 0 && financing.shares !== Math.round(financing.invested / financing.costPerShare)
   );
 
   const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
-  const finalShares = useManualShares ? form.manualShares : calculatedShares;
+  const finalShares = isUnconverted ? 0 : (useManualShares ? form.manualShares : calculatedShares);
 
   const handleSave = () => {
     if (!form.date || !form.invested) {
       alert('Please fill in Date and Investment Amount');
       return;
     }
-    if (!useManualShares && !form.costPerShare) {
-      alert('Please enter Cost per Share or toggle to manual shares entry');
-      return;
-    }
-    if (useManualShares && !form.manualShares) {
-      alert('Please enter number of shares');
-      return;
+    if (!isUnconverted) {
+      if (!useManualShares && !form.costPerShare) {
+        alert('Please enter Cost per Share or toggle to manual shares entry');
+        return;
+      }
+      if (useManualShares && !form.manualShares) {
+        alert('Please enter number of shares');
+        return;
+      }
     }
     onSave({
       ...form,
       shares: finalShares,
-      fmvPerShare: form.costPerShare || 0
+      converted: isSafeOrNote ? converted : true,
+      costPerShare: isUnconverted ? 0 : form.costPerShare,
+      fmvPerShare: isUnconverted ? 0 : (form.costPerShare || 0)
     });
   };
 
@@ -2405,6 +2476,22 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
                 {fundNames.map(fn => <option key={fn} value={fn}>{fn}</option>)}
               </select>
             </div>
+
+            {/* Converted toggle - only shown for SAFE / Convertible Note */}
+            {isSafeOrNote && (
+              <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={converted}
+                    onChange={e => setConverted(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>This {form.asset} has converted</span>
+                </label>
+              </div>
+            )}
+
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
             <div className="field"><label>Investment Amount ($) *</label>
               <input
@@ -2415,55 +2502,63 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
               />
             </div>
 
-            <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={useManualShares}
-                  onChange={e => setUseManualShares(e.target.checked)}
-                  style={{ width: 16, height: 16, cursor: 'pointer' }}
-                />
-                <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry (for SAFEs, convertible notes, etc.)</span>
-              </label>
-            </div>
-
-            {!useManualShares ? (
-              <>
-                <div className="field"><label>Cost per Share ($) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.costPerShare}
-                    onChange={e => setForm({...form, costPerShare: +e.target.value})}
-                    placeholder="5.00"
-                  />
-                </div>
-                <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
-                  <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
-                    {calculatedShares.toLocaleString()}
-                  </div>
-                </div>
-              </>
+            {isUnconverted ? (
+              <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
+                <strong>Unconverted {form.asset}:</strong> The investment amount will be used as both the invested amount and the current value until this {form.asset} converts. No share or cost-per-share information is required.
+              </div>
             ) : (
               <>
-                <div className="field"><label>Number of Shares *</label>
-                  <input
-                    type="number"
-                    value={form.manualShares}
-                    onChange={e => setForm({...form, manualShares: +e.target.value})}
-                    placeholder="200000"
-                  />
+                <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={useManualShares}
+                      onChange={e => setUseManualShares(e.target.checked)}
+                      style={{ width: 16, height: 16, cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>Manual shares entry</span>
+                  </label>
                 </div>
-                <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={form.costPerShare}
-                    onChange={e => setForm({...form, costPerShare: +e.target.value})}
-                    placeholder="0.00"
-                  />
-                </div>
+
+                {!useManualShares ? (
+                  <>
+                    <div className="field"><label>Cost per Share ($) *</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={form.costPerShare}
+                        onChange={e => setForm({...form, costPerShare: +e.target.value})}
+                        placeholder="5.00"
+                      />
+                    </div>
+                    <div className="field" style={{ background: 'var(--surface)', padding: '12px', borderRadius: 8, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <label style={{ color: 'var(--ink-muted)', marginBottom: 4, fontSize: 11 }}>Calculated Shares</label>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: 'var(--gold-dark)' }}>
+                        {calculatedShares.toLocaleString()}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="field"><label>Number of Shares *</label>
+                      <input
+                        type="number"
+                        value={form.manualShares}
+                        onChange={e => setForm({...form, manualShares: +e.target.value})}
+                        placeholder="200000"
+                      />
+                    </div>
+                    <div className="field"><label>Cost per Share ($) <span style={{fontSize: 11, color: 'var(--ink-muted)'}}>(optional)</span></label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={form.costPerShare}
+                        onChange={e => setForm({...form, costPerShare: +e.target.value})}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -3166,6 +3261,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             shares: parseInt(f.shares),
             costPerShare: parseFloat(f.cost_per_share) || 0,
             fmvPerShare: parseFloat(f.fmv_per_share) || 0,
+            converted: f.converted !== undefined ? f.converted : true,
             value: 0
           }))
       }));
@@ -3511,12 +3607,14 @@ function FundPortfolioTab({ portfolio, fundName }) {
     const syncedFMV = getCompanySyncedFMV(comp);
 
     return total + comp.financings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
       const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
   }, 0);
-  
+
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
@@ -3578,6 +3676,8 @@ function FundPortfolioTab({ portfolio, fundName }) {
 
                 const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
                 const compValue = comp.financings.reduce((s, f) => {
+                  const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+                  if (isUnconverted) return s + f.invested;
                   const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
@@ -3621,20 +3721,26 @@ function FundPortfolioTab({ portfolio, fundName }) {
                   /* Financing rows (expanded) */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
-                    const calculatedShares = fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0);
-                    const calculatedValue = calculatedShares * displayFMV;
+                    const isUnconverted = (fin.asset === "SAFE" || fin.asset === "Convertible Note") && fin.converted === false;
+                    const calculatedShares = isUnconverted ? 0 : (fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0));
+                    const calculatedValue = isUnconverted ? fin.invested : (calculatedShares * displayFMV);
                     const gl = calculatedValue - fin.invested;
                     const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
 
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
-                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
+                            {isUnconverted && (
+                              <span style={{ fontSize: 9, background: "#fff3cd", color: "#856404", borderRadius: 4, padding: "1px 5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Unconverted</span>
+                            )}
+                          </div>
                         </td>
                         <td></td>
                         <td style={{ fontSize: 12 }}>{fin.date}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--ink-muted)" }}>
-                          {calculatedShares.toLocaleString()}
+                          {isUnconverted ? "—" : calculatedShares.toLocaleString()}
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>{fmtMoney(fin.invested)}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
@@ -3642,10 +3748,10 @@ function FundPortfolioTab({ portfolio, fundName }) {
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {fin.costPerShare > 0 ? `$${fin.costPerShare.toFixed(2)}` : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                          {isUnconverted ? <span style={{ color: "var(--ink-muted)" }}>—</span> : fin.costPerShare > 0 ? `$${fin.costPerShare.toFixed(2)}` : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {displayFMV > 0 ? (
+                          {isUnconverted ? <span style={{ color: "var(--ink-muted)" }}>—</span> : displayFMV > 0 ? (
                             <span style={{ color: comp.manualFMV !== undefined && comp.manualFMV !== null ? "var(--gold-dark)" : finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
                               ${displayFMV.toFixed(2)}
                             </span>
