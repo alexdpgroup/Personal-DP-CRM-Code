@@ -1521,7 +1521,7 @@ function PortfolioPage({ fundDefs }) {
         .from('financings')
         .select('*')
         .order('date');
-
+      
       if (finError) throw finError;
 
       // Combine into schedule format
@@ -1604,7 +1604,7 @@ function PortfolioPage({ fundDefs }) {
         asset: 'asset',
         shares: 'shares'
       };
-
+      
       const dbField = fieldMap[field] || field;
       const { error } = await supabase
         .from('financings')
@@ -1636,9 +1636,9 @@ function PortfolioPage({ fundDefs }) {
         .from('financings')
         .delete()
         .eq('id', fin.id);
-
+      
       if (error) throw error;
-
+      
       // Update local state
       const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
         ...c,
@@ -1699,30 +1699,30 @@ function PortfolioPage({ fundDefs }) {
   };
 
   const updateCompany = async (compIdx, updates) => {
-    const company = schedule[compIdx];
-    try {
-      if (company.companyId) {
-        const { error } = await supabase
-          .from('portfolio_companies')
-          .update({
-            company_name: updates.company,
-            sector: updates.sector
-          })
-          .eq('id', company.companyId);
-        if (error) throw error;
+      const company = schedule[compIdx];
+      try {
+        if (company.companyId) {
+          const { error } = await supabase
+            .from('portfolio_companies')
+            .update({
+              company_name: updates.company,
+              sector: updates.sector
+            })
+            .eq('id', company.companyId);
+          if (error) throw error;
+        }
+        const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
+          ...c,
+          company: updates.company,
+          sector: updates.sector
+        });
+        setSchedule(updated);
+        setEditCompanyIdx(null);
+      } catch (error) {
+        console.error('❌ Error updating company:', error);
+        alert('Error updating company');
       }
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-        ...c,
-        company: updates.company,
-        sector: updates.sector
-      });
-      setSchedule(updated);
-      setEditCompanyIdx(null);
-    } catch (error) {
-      console.error('❌ Error updating company:', error);
-      alert('Error updating company');
-    }
-  };
+    };
 
   const updateFinancingFull = async (compIdx, finIdx, updates) => {
     const comp = schedule[compIdx];
@@ -1763,6 +1763,7 @@ function PortfolioPage({ fundDefs }) {
     }
   };
 
+  
   const addFinancing = async (compIdx, fin) => {
     console.log('➕ Adding financing:', fin, 'to company index:', compIdx);
     const company = schedule[compIdx];
@@ -1785,16 +1786,16 @@ function PortfolioPage({ fundDefs }) {
         })
         .select()
         .single();
-
+      
       if (error) throw error;
-
+      
       // Update local state - inherit fund from company
       const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-        ...c,
+        ...c, 
         financings: [...c.financings, {
           id: newFin.id,
           asset: newFin.asset,
-          fund: newFin.fund || company.fund || '',
+          fund: newFin.fund || company.fund || '', // Inherit from company, not from financing record
           date: newFin.date,
           invested: parseFloat(newFin.invested) || 0,
           shares: parseInt(newFin.shares) || 0,
@@ -1986,7 +1987,7 @@ function PortfolioPage({ fundDefs }) {
                   /* ── Financing rows (expanded) ── */
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
                     // Get latest round for tooltip reference
-                    const latestRound = comp.financings[comp.financings.length - 1];
+                    const latestRound = comp.financings[comp.financings.length -1];
                     // Use same FMV logic
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
                     
@@ -2129,7 +2130,7 @@ function PortfolioPage({ fundDefs }) {
           onSave={addCompany}
         />
       )}
-
+      
       {/* Edit Company Modal */}
       {editCompanyIdx !== null && (
         <EditCompanyModal
@@ -2476,7 +2477,6 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
     </div>
   );
 }
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── ADD FUND MODAL ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3188,7 +3188,6 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
   const nav = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
-  const fundPortfolioCount = portfolio.filter(comp => comp.financings.some(f => f.fund === fundName)).length;
   const shortName = fundName.replace("Decisive Point ", "");
 
   // pipeline by stage
@@ -3305,7 +3304,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             transition: 'all 0.2s'
           }}
         >
-          Portfolio ({fundPortfolioCount})
+          Portfolio ({portfolio.length})
         </button>
       </div>
 
@@ -3489,7 +3488,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
     }))
     .filter(comp => comp.financings.length > 0);
 
-  // Helper: compute company-level synced FMV using same logic as Portfolio page
+// Helper: compute company-level synced FMV using same logic as Portfolio page
   // Priority: manual override > most recent by date > last entered
   const getCompanySyncedFMV = (comp) => {
     if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
@@ -3501,15 +3500,15 @@ function FundPortfolioTab({ portfolio, fundName }) {
     }
     return 0;
   };
-
+  
   // Calculate fund-level totals (only from this fund's financings)
   const totalInvested = fundPortfolio.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => s + f.invested, 0);
   }, 0);
-
+  
   const totalValue = fundPortfolio.reduce((total, comp) => {
-    const syncedFMV = getCompanySyncedFMV(comp);
-
+     const syncedFMV = getCompanySyncedFMV(comp);
+    
     return total + comp.financings.reduce((s, f) => {
       const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
@@ -3575,7 +3574,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
             <tbody>
               {fundPortfolio.map((comp, compIdx) => {
                 const syncedFMV = getCompanySyncedFMV(comp);
-
+                
                 const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
                 const compValue = comp.financings.reduce((s, f) => {
                   const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
@@ -3625,7 +3624,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
                     const calculatedValue = calculatedShares * displayFMV;
                     const gl = calculatedValue - fin.invested;
                     const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
-
+                    
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
