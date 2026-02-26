@@ -454,7 +454,7 @@ export default function CRM({ session, onLogout }) {
 
   const saveLPs = async (updated) => {
     setLPs(updated);
-    // Persist each changed LP to Supabase
+    // Persist each changed LP to Supabase (only columns that exist in the table)
     for (const lp of updated) {
       if (lp.id) {
         try {
@@ -472,9 +472,6 @@ export default function CRM({ session, onLogout }) {
               commitment: lp.commitment,
               funded: lp.funded,
               nav: lp.nav,
-              notes: lp.notes || [],
-              docs: lp.docs || [],
-              commitments: lp.commitments || [],
             })
             .eq('id', lp.id);
           if (error) console.error('Error saving LP:', lp.id, error);
@@ -1387,8 +1384,8 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
           {tab === "notes" && (
             <div>
               <div className="notes-list">
-                {lp.notes.length === 0 && <div className="text-muted">No notes yet. Add one below.</div>}
-                {lp.notes.map((n, i) => (
+                {(lp.notes || []).length === 0 && <div className="text-muted">No notes yet. Add one below.</div>}
+                {(lp.notes || []).map((n, i) => (
                   <div key={i} className="note-item">
                     <div className="note-meta">{n.date} · {n.author}</div>
                     <div className="note-text">{n.text}</div>
@@ -1410,8 +1407,8 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
 
           {tab === "docs" && (
             <div>
-              {lp.docs.length === 0 && <div className="text-muted">No documents on file.</div>}
-              {lp.docs.map((d, i) => (
+              {(lp.docs || []).length === 0 && <div className="text-muted">No documents on file.</div>}
+              {(lp.docs || []).map((d, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid var(--border)" }}>
                   <div className="flex-row">
                     <Icon name="note" size={15} />
@@ -1563,9 +1560,7 @@ function AddLPDrawer({ onClose, onSave }) {
           commitment: 0,
           funded: 0,
           nav: 0,
-          fund: null, // Will be assigned from fund pages
-          notes: [],
-          docs: []
+          fund: null // Will be assigned from fund pages
         }])
         .select()
         .single();
@@ -3479,11 +3474,11 @@ function InvestorPortal({ lp, onExit }) {
         )}
 
         {/* Documents */}
-        {lp.docs.length > 0 && (
+        {(lp.docs || []).length > 0 && (
           <div className="portal-card mt-4">
             <h3>Your Documents</h3>
-            {lp.docs.map((d, i) => (
-              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: i < lp.docs.length - 1 ? "1px solid var(--border)" : "none" }}>
+            {(lp.docs || []).map((d, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: i < (lp.docs || []).length - 1 ? "1px solid var(--border)" : "none" }}>
                 <div className="flex-row">
                   <Icon name="note" size={15} />
                   <span style={{ fontSize: 13.5 }}>{d}</span>
