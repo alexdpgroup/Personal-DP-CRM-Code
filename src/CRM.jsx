@@ -3407,7 +3407,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
             transition: 'all 0.2s'
           }}
         >
-          Portfolio ({portfolio.length})
+          Portfolio ({portfolio.filter(c => c.financings.some(f => f.fund === fundName)).length})
         </button>
       </div>
 
