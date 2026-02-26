@@ -432,6 +432,7 @@ export default function CRM({ session, onLogout }) {
 
       // Transform funds to match expected format
       const transformedFunds = funds?.map(f => ({
+        id: f.id,
         name: f.name,
         vintage: f.vintage,
         target: f.target_amount,
@@ -1001,7 +1002,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
         </div>
       </div>
 
-      {showAdd && <AddLPDrawer onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, { ...newLP, commitments: [] }]); setShowAdd(false); }} />}
+      {showAdd && <AddLPDrawer fundDefs={fundDefs} onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, { ...newLP, commitments: [] }]); setShowAdd(false); }} />}
 
       {addCommitmentFor !== null && (
         <AddCommitmentDrawer
@@ -1500,12 +1501,14 @@ function AddContactModal({ lpId, onClose, onSave }) {
 }
 
 // ── Add LP Drawer ─────────────────────────────────────────────────────────────
-function AddLPDrawer({ onClose, onSave }) {
+function AddLPDrawer({ onClose, onSave, fundDefs }) {
+  const funds = fundDefs || [];
   const [form, setForm] = useState({
     name: "", // Primary contact name
     firm: "",
     email: "",
     phone: "",
+    fund_id: funds.length > 0 ? funds[0].id : "",
     additionalContacts: []
   });
 
@@ -1539,6 +1542,10 @@ function AddLPDrawer({ onClose, onSave }) {
       alert('Please enter LP/Firm name and Primary Contact');
       return;
     }
+    if (!form.fund_id) {
+      alert('Please select a fund');
+      return;
+    }
 
     try {
       // Create LP record in Supabase
@@ -1549,6 +1556,7 @@ function AddLPDrawer({ onClose, onSave }) {
           firm: form.firm,
           email: form.email,
           phone: form.phone,
+          fund_id: form.fund_id,
         }])
         .select()
         .single();
@@ -1594,6 +1602,11 @@ function AddLPDrawer({ onClose, onSave }) {
             <div className="field span2"><label>Primary Contact Name *</label><input value={form.name} onChange={f("name")} placeholder="Thomas Hendrix" /></div>
             <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="thomas@trophypoint.com" /></div>
             <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
+            <div className="field span2"><label>Fund / SPV *</label>
+              <select value={form.fund_id} onChange={e => setForm({ ...form, fund_id: e.target.value })}>
+                {funds.map(fd => <option key={fd.id} value={fd.id}>{fd.name}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Additional Contacts */}
