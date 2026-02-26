@@ -1566,7 +1566,6 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
           phone: form.phone,
           fund_id: defaultFundId,
           stage: 'outreach',
-          is_contact_record: false,
         }])
         .select()
         .single();
