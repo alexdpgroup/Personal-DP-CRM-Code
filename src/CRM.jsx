@@ -327,7 +327,8 @@ function fmtMoney(n, short = false) {
 }
 
 function initials(name) {
-  return name.split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  if (!name) return "?";
+  return name.split(" ").map(w => w[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "?";
 }
 
 function stageInfo(id) { return STAGES.find(s => s.id === id) || STAGES[0]; }
@@ -461,17 +462,16 @@ export default function CRM({ session, onLogout }) {
           const { error } = await supabase
             .from('lps')
             .update({
-              name: lp.name,
-              firm: lp.firm,
-              email: lp.email,
-              phone: lp.phone,
-              stage: lp.stage,
-              partner: lp.partner,
-              tier: lp.tier,
-              fund: lp.fund,
-              commitment: lp.commitment,
-              funded: lp.funded,
-              nav: lp.nav,
+              name: lp.name || '',
+              firm: lp.firm || '',
+              email: lp.email || '',
+              phone: lp.phone || '',
+              stage: lp.stage || 'outreach',
+              partner: lp.partner || '',
+              fund: lp.fund || null,
+              commitment: lp.commitment || 0,
+              funded: lp.funded || 0,
+              nav: lp.nav || 0,
             })
             .eq('id', lp.id);
           if (error) console.error('Error saving LP:', lp.id, error);
