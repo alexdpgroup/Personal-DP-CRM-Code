@@ -897,8 +897,9 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
             <table style={{ minWidth: 900 }}>
               <thead>
                 <tr>
-                  <th style={{ width: 250 }}>Investor</th>
+                  <th style={{ width: 220 }}>Investor</th>
                   <th>Contact</th>
+                  <th>Fund</th>
                   <th>Stage</th>
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Commitment</th>
@@ -914,6 +915,12 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                   const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
                   const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
                   const lpNAV = commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
+                  const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
+                  const fundDisplay = fundsInvested.length === 1
+                    ? fundsInvested[0].replace("Decisive Point ", "")
+                    : fundsInvested.length > 1
+                      ? `${fundsInvested.length} funds`
+                      : "—";
                   const isOpen = expanded[lp.id];
                   // Find actual index in original lps array
                   const realIdx = lps.findIndex(l => l.id === lp.id);
@@ -945,6 +952,11 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                         <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{lp.email || "—"}</div>
                       </td>
                       <td>
+                        <span className="tag" style={{ fontSize: 11 }} title={fundsInvested.length > 1 ? fundsInvested.join(', ') : ''}>
+                          {fundDisplay}
+                        </span>
+                      </td>
+                      <td>
                         <span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
                       </td>
                       <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
@@ -974,6 +986,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                             {commit.fund ? commit.fund.replace("Decisive Point ", "") : "No fund"}
                           </span>
                         </td>
+                        <td></td>
                         <td></td>
                         <td></td>
                         <td></td>
@@ -1508,7 +1521,6 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
     firm: "",
     email: "",
     phone: "",
-    fund_id: funds.length > 0 ? funds[0].id : "",
     additionalContacts: []
   });
 
@@ -1542,13 +1554,9 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
       alert('Please enter LP/Firm name and Primary Contact');
       return;
     }
-    if (!form.fund_id) {
-      alert('Please select a fund');
-      return;
-    }
-
     try {
-      // Create LP record in Supabase
+      // Create LP record in Supabase (include all NOT NULL columns)
+      const defaultFundId = funds.length > 0 ? funds[0].id : null;
       const { data: lp, error: lpError } = await supabase
         .from('lps')
         .insert([{
@@ -1556,7 +1564,9 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
           firm: form.firm,
           email: form.email,
           phone: form.phone,
-          fund_id: form.fund_id,
+          fund_id: defaultFundId,
+          stage: 'outreach',
+          is_contact_record: false,
         }])
         .select()
         .single();
@@ -1602,11 +1612,6 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
             <div className="field span2"><label>Primary Contact Name *</label><input value={form.name} onChange={f("name")} placeholder="Thomas Hendrix" /></div>
             <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="thomas@trophypoint.com" /></div>
             <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
-            <div className="field span2"><label>Fund / SPV *</label>
-              <select value={form.fund_id} onChange={e => setForm({ ...form, fund_id: e.target.value })}>
-                {funds.map(fd => <option key={fd.id} value={fd.id}>{fd.name}</option>)}
-              </select>
-            </div>
           </div>
 
           {/* Additional Contacts */}
