@@ -1564,6 +1564,7 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
           firm: form.firm,
           email: form.email,
           phone: form.phone,
+          partner: form.partner,
           fund_id: defaultFundId,
           stage: 'outreach',
         }])
