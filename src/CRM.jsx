@@ -3743,7 +3743,11 @@ function FundPortfolioTab({ portfolio, fundName }) {
                     <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
                     <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right" }}>
+                      <span style={{ color: comp.manualFMV !== undefined ? 'var(--gold-dark)' : 'var(--ink)', fontWeight: comp.manualFMV !== undefined ? 600 : 400 }}>
+                        ${syncedFMV.toFixed(2)}
+                      </span>
+                    </td>
                     <td style={{ textAlign: "right" }}>
                       <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
                     </td>
