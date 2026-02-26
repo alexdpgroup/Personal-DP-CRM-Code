@@ -1567,7 +1567,11 @@ function PortfolioPage({ fundDefs }) {
 
   // Totals across all - using auto-calculated values with manual overrides
   const totalInvested = schedule.reduce((total, comp) => {
-    return total + comp.financings.reduce((s, f) => s + f.invested, 0);
+    return total + comp.financings.reduce((s, f) => {
+      // Unconverted Warrants: no effect on invested
+      if (f.asset === "Warrants" && f.converted === false) return s;
+      return s + f.invested;
+    }, 0);
   }, 0);
   
   const totalValue = schedule.reduce((total, comp) => {
@@ -1584,6 +1588,9 @@ function PortfolioPage({ fundDefs }) {
       // Unconverted SAFEs/Notes: value = invested amount
       const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
       if (isUnconverted) return s + f.invested;
+      // Unconverted Warrants: no effect on value
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
       // Auto-calculate shares if not provided: invested / cost_per_share
       const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
@@ -1594,7 +1601,8 @@ function PortfolioPage({ fundDefs }) {
   const totalShares = schedule.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => {
       const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
-      if (isUnconverted) return s;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconverted || isUnconvertedWarrant) return s;
       return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
     }, 0);
   }, 0);
@@ -1915,17 +1923,23 @@ function PortfolioPage({ fundDefs }) {
                   syncedFMV = sortedByDate[0]?.costPerShare || 0;
                 }
                 
-                const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
+                const compInvested = comp.financings.reduce((s, f) => {
+                  if (f.asset === "Warrants" && f.converted === false) return s;
+                  return s + f.invested;
+                }, 0);
                 const compValue = comp.financings.reduce((s, f) => {
                   const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
                   if (isUnconverted) return s + f.invested;
+                  const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+                  if (isUnconvertedWarrant) return s;
                   const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
                 const compShares   = comp.financings.reduce((s, f) => {
                   const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
-                  if (isUnconverted) return s;
+                  const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+                  if (isUnconverted || isUnconvertedWarrant) return s;
                   return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
                 }, 0);
                 const compGL       = compValue - compInvested;
@@ -2014,18 +2028,20 @@ function PortfolioPage({ fundDefs }) {
                     // Use same FMV logic
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
 
-                    // Check if this is an unconverted SAFE/Note
+                    // Check if this is an unconverted SAFE/Note or Warrant
                     const isUnconverted = (fin.asset === "SAFE" || fin.asset === "Convertible Note") && fin.converted === false;
+                    const isUnconvertedWarrant = fin.asset === "Warrants" && fin.converted === false;
 
                     // Auto-calculate shares if not provided
-                    const calculatedShares = isUnconverted ? 0 : (fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0));
+                    const calculatedShares = (isUnconverted || isUnconvertedWarrant) ? 0 : (fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0));
 
-                    // For unconverted SAFEs/Notes, value = invested; otherwise shares * FMV
-                    const calculatedValue = isUnconverted ? fin.invested : (calculatedShares * displayFMV);
+                    // For unconverted SAFEs/Notes, value = invested; unconverted Warrants, value = 0; otherwise shares * FMV
+                    const calculatedValue = isUnconvertedWarrant ? 0 : (isUnconverted ? fin.invested : (calculatedShares * displayFMV));
 
                     // Calculate gain/loss and MOIC from auto-calculated value
-                    const gl = calculatedValue - fin.invested;
-                    const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
+                    const effectiveInvested = isUnconvertedWarrant ? 0 : fin.invested;
+                    const gl = calculatedValue - effectiveInvested;
+                    const moic = effectiveInvested > 0 ? (calculatedValue / effectiveInvested).toFixed(2) : "—";
                     
                     const cellKey = (field) => `${compIdx}-${finIdx}-${field}`;
                     const isEditing = (field) => editingCell === cellKey(field);
@@ -2061,8 +2077,8 @@ function PortfolioPage({ fundDefs }) {
                         <td style={{ paddingLeft: 44 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
-                            {isUnconverted && (
-                              <span style={{ fontSize: 9, background: "#fff3cd", color: "#856404", borderRadius: 4, padding: "1px 5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Unconverted</span>
+                            {(isUnconverted || isUnconvertedWarrant) && (
+                              <span style={{ fontSize: 9, background: "#fff3cd", color: "#856404", borderRadius: 4, padding: "1px 5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{isUnconvertedWarrant ? "Unexercised" : "Unconverted"}</span>
                             )}
                           </div>
                         </td>
@@ -2079,26 +2095,31 @@ function PortfolioPage({ fundDefs }) {
                           }
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {isUnconverted
-                            ? <span style={{ color: "var(--ink-muted)" }}>—</span>
+                          {(isUnconverted || isUnconvertedWarrant)
+                            ? <span style={{ color: "var(--ink-muted)" }}>{isUnconvertedWarrant && fin.shares ? fin.shares.toLocaleString() : "—"}</span>
                             : <span style={{ color: "var(--ink-muted)" }} title="Auto-calculated: Investment ÷ Cost/Share">
                                 {calculatedShares.toLocaleString()}
                               </span>
                           }
                         </td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}><EditableCell field="invested" /></td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
-                          <span title={isUnconverted ? "Unconverted - value equals investment amount" : "Auto-calculated: Shares × FMV/Share"}>{fmtMoney(calculatedValue)}</span>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>
+                          {isUnconvertedWarrant
+                            ? <span style={{ color: "var(--ink-muted)" }}>{fin.invested ? fmtMoney(fin.invested) : "—"}</span>
+                            : <EditableCell field="invested" />
+                          }
+                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= effectiveInvested ? "var(--green)" : "var(--red)" }}>
+                          <span title={isUnconvertedWarrant ? "Unexercised - no effect on value" : (isUnconverted ? "Unconverted - value equals investment amount" : "Auto-calculated: Shares × FMV/Share")}>{fmtMoney(calculatedValue)}</span>
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {isUnconverted
+                          {(isUnconverted || isUnconvertedWarrant)
                             ? <span style={{ color: "var(--ink-muted)" }}>—</span>
                             : fin.costPerShare > 0 ? <EditableCell field="costPerShare" /> : <span style={{ color: "var(--ink-muted)" }}>N/A</span>
                           }
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {isUnconverted
+                          {(isUnconverted || isUnconvertedWarrant)
                             ? <span style={{ color: "var(--ink-muted)" }}>—</span>
                             : displayFMV > 0 ? (
                               <span title={finIdx < comp.financings.length - 1 ? `Synced from latest round (${latestRound.asset})` : "Latest round - sets FMV for all rounds"} style={{ color: finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
@@ -2208,20 +2229,28 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
   const [converted, setConverted] = useState(true);
 
   const isSafeOrNote = form.asset === "SAFE" || form.asset === "Convertible Note";
+  const isWarrant = form.asset === "Warrants";
   const isUnconverted = isSafeOrNote && !converted;
+  const isUnconvertedWarrant = isWarrant && !converted;
 
   // Auto-calculate shares when invested or costPerShare changes
   const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
-  const finalShares = isUnconverted ? 0 : (useManualShares ? form.manualShares : calculatedShares);
+  const finalShares = (isUnconverted || isUnconvertedWarrant) ? (isUnconvertedWarrant ? form.manualShares : 0) : (useManualShares ? form.manualShares : calculatedShares);
 
   const handleSave = () => {
-    if (!form.date || !form.invested) {
-      alert('Please fill in Date and Investment Amount');
+    if (!form.date) {
+      alert('Please fill in Investment Date');
+      return;
+    }
+
+    // Warrants: investment amount is optional; others require it
+    if (!isWarrant && !form.invested) {
+      alert('Please fill in Investment Amount');
       return;
     }
 
     // For unconverted SAFEs/Notes, only investment amount is needed
-    if (!isUnconverted) {
+    if (!isUnconverted && !isUnconvertedWarrant) {
       if (!useManualShares && !form.costPerShare) {
         alert('Please enter Cost per Share or toggle to manual shares entry');
         return;
@@ -2237,10 +2266,10 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
     onSave({
       ...form,
       shares: finalShares,
-      converted: isSafeOrNote ? converted : true,
+      converted: (isSafeOrNote || isWarrant) ? converted : true,
       value: form.invested, // Initial value equals investment
-      costPerShare: isUnconverted ? 0 : form.costPerShare,
-      fmvPerShare: isUnconverted ? 0 : (form.costPerShare || 0)
+      costPerShare: (isUnconverted || isUnconvertedWarrant) ? 0 : form.costPerShare,
+      fmvPerShare: (isUnconverted || isUnconvertedWarrant) ? 0 : (form.costPerShare || 0)
     });
   };
 
@@ -2270,8 +2299,8 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
               </select>
             </div>
 
-            {/* Converted toggle - only shown for SAFE / Convertible Note */}
-            {isSafeOrNote && (
+            {/* Converted toggle - shown for SAFE / Convertible Note / Warrants */}
+            {(isSafeOrNote || isWarrant) && (
               <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
                   <input
@@ -2280,23 +2309,37 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
                     onChange={e => setConverted(e.target.checked)}
                     style={{ width: 16, height: 16, cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>This {form.asset} has converted</span>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{isWarrant ? "These Warrants have been exercised" : `This ${form.asset} has converted`}</span>
                 </label>
               </div>
             )}
 
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
-            <div className="field"><label>Investment Amount ($) *</label>
+            <div className="field"><label>Investment Amount ($){isWarrant ? '' : ' *'}</label>
               <input
                 type="number"
                 value={form.invested}
                 onChange={e => setForm({...form, invested: +e.target.value})}
-                placeholder="1000000"
+                placeholder={isWarrant ? "0" : "1000000"}
               />
             </div>
 
             {/* If unconverted SAFE/Note, show info message instead of share fields */}
-            {isUnconverted ? (
+            {isUnconvertedWarrant ? (
+              <>
+                <div className="field"><label>Number of Shares</label>
+                  <input
+                    type="number"
+                    value={form.manualShares}
+                    onChange={e => setForm({...form, manualShares: +e.target.value})}
+                    placeholder="200000"
+                  />
+                </div>
+                <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
+                  <strong>Unconverted Warrants:</strong> These warrants will have no effect on invested amount or portfolio value until exercised. You can record the number of shares now.
+                </div>
+              </>
+            ) : isUnconverted ? (
               <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
                 <strong>Unconverted {form.asset}:</strong> The investment amount will be used as both the invested amount and the current value until this {form.asset} converts. No share or cost-per-share information is required.
               </div>
@@ -2437,23 +2480,29 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
     manualShares: financing.shares || 0
   });
   const isSafeOrNote = form.asset === "SAFE" || form.asset === "Convertible Note";
+  const isWarrant = form.asset === "Warrants";
   const [converted, setConverted] = useState(
     financing.converted !== undefined ? financing.converted : true
   );
   const isUnconverted = isSafeOrNote && !converted;
+  const isUnconvertedWarrant = isWarrant && !converted;
   const [useManualShares, setUseManualShares] = useState(
     financing.shares > 0 && financing.costPerShare > 0 && financing.shares !== Math.round(financing.invested / financing.costPerShare)
   );
 
   const calculatedShares = form.costPerShare > 0 ? Math.round(form.invested / form.costPerShare) : 0;
-  const finalShares = isUnconverted ? 0 : (useManualShares ? form.manualShares : calculatedShares);
+  const finalShares = (isUnconverted || isUnconvertedWarrant) ? (isUnconvertedWarrant ? form.manualShares : 0) : (useManualShares ? form.manualShares : calculatedShares);
 
   const handleSave = () => {
-    if (!form.date || !form.invested) {
-      alert('Please fill in Date and Investment Amount');
+    if (!form.date) {
+      alert('Please fill in Investment Date');
       return;
     }
-    if (!isUnconverted) {
+    if (!isWarrant && !form.invested) {
+      alert('Please fill in Investment Amount');
+      return;
+    }
+    if (!isUnconverted && !isUnconvertedWarrant) {
       if (!useManualShares && !form.costPerShare) {
         alert('Please enter Cost per Share or toggle to manual shares entry');
         return;
@@ -2466,9 +2515,9 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
     onSave({
       ...form,
       shares: finalShares,
-      converted: isSafeOrNote ? converted : true,
-      costPerShare: isUnconverted ? 0 : form.costPerShare,
-      fmvPerShare: isUnconverted ? 0 : (form.costPerShare || 0)
+      converted: (isSafeOrNote || isWarrant) ? converted : true,
+      costPerShare: (isUnconverted || isUnconvertedWarrant) ? 0 : form.costPerShare,
+      fmvPerShare: (isUnconverted || isUnconvertedWarrant) ? 0 : (form.costPerShare || 0)
     });
   };
 
@@ -2498,8 +2547,8 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
               </select>
             </div>
 
-            {/* Converted toggle - only shown for SAFE / Convertible Note */}
-            {isSafeOrNote && (
+            {/* Converted toggle - shown for SAFE / Convertible Note / Warrants */}
+            {(isSafeOrNote || isWarrant) && (
               <div className="field span2" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }}>
                   <input
@@ -2508,22 +2557,36 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
                     onChange={e => setConverted(e.target.checked)}
                     style={{ width: 16, height: 16, cursor: 'pointer' }}
                   />
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>This {form.asset} has converted</span>
+                  <span style={{ fontSize: 13, fontWeight: 500 }}>{isWarrant ? "These Warrants have been exercised" : `This ${form.asset} has converted`}</span>
                 </label>
               </div>
             )}
 
             <div className="field"><label>Investment Date *</label><input type="date" value={form.date} onChange={f("date")} /></div>
-            <div className="field"><label>Investment Amount ($) *</label>
+            <div className="field"><label>Investment Amount ($){isWarrant ? '' : ' *'}</label>
               <input
                 type="number"
                 value={form.invested}
                 onChange={e => setForm({...form, invested: +e.target.value})}
-                placeholder="1000000"
+                placeholder={isWarrant ? "0" : "1000000"}
               />
             </div>
 
-            {isUnconverted ? (
+            {isUnconvertedWarrant ? (
+              <>
+                <div className="field"><label>Number of Shares</label>
+                  <input
+                    type="number"
+                    value={form.manualShares}
+                    onChange={e => setForm({...form, manualShares: +e.target.value})}
+                    placeholder="200000"
+                  />
+                </div>
+                <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
+                  <strong>Unconverted Warrants:</strong> These warrants will have no effect on invested amount or portfolio value until exercised. You can record the number of shares now.
+                </div>
+              </>
+            ) : isUnconverted ? (
               <div className="field span2" style={{ background: 'var(--gold-light)', padding: '10px 12px', borderRadius: 6, fontSize: 11, color: 'var(--gold-dark)' }}>
                 <strong>Unconverted {form.asset}:</strong> The investment amount will be used as both the invested amount and the current value until this {form.asset} converts. No share or cost-per-share information is required.
               </div>
@@ -3619,15 +3682,20 @@ function FundPortfolioTab({ portfolio, fundName }) {
   
   // Calculate fund-level totals (only from this fund's financings)
   const totalInvested = fundPortfolio.reduce((total, comp) => {
-    return total + comp.financings.reduce((s, f) => s + f.invested, 0);
+    return total + comp.financings.reduce((s, f) => {
+      if (f.asset === "Warrants" && f.converted === false) return s;
+      return s + f.invested;
+    }, 0);
   }, 0);
-  
+
   const totalValue = fundPortfolio.reduce((total, comp) => {
      const syncedFMV = getCompanySyncedFMV(comp);
-    
+
     return total + comp.financings.reduce((s, f) => {
       const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
       if (isUnconverted) return s + f.invested;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
       const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
@@ -3637,7 +3705,8 @@ function FundPortfolioTab({ portfolio, fundName }) {
   const totalShares = fundPortfolio.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => {
       const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
-      if (isUnconverted) return s;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconverted || isUnconvertedWarrant) return s;
       return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
     }, 0);
   }, 0);
@@ -3700,17 +3769,23 @@ function FundPortfolioTab({ portfolio, fundName }) {
               {fundPortfolio.map((comp, compIdx) => {
                 const syncedFMV = getCompanySyncedFMV(comp);
                 
-                const compInvested = comp.financings.reduce((s, f) => s + f.invested, 0);
+                const compInvested = comp.financings.reduce((s, f) => {
+                  if (f.asset === "Warrants" && f.converted === false) return s;
+                  return s + f.invested;
+                }, 0);
                 const compValue = comp.financings.reduce((s, f) => {
                   const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
                   if (isUnconverted) return s + f.invested;
+                  const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+                  if (isUnconvertedWarrant) return s;
                   const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
                 const compShares = comp.financings.reduce((s, f) => {
                   const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
-                  if (isUnconverted) return s;
+                  const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+                  if (isUnconverted || isUnconvertedWarrant) return s;
                   return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
                 }, 0);
                 const compGL = compValue - compInvested;
@@ -3757,36 +3832,40 @@ function FundPortfolioTab({ portfolio, fundName }) {
                   ...(isOpen ? comp.financings.map((fin, finIdx) => {
                     const displayFMV = syncedFMV || fin.fmvPerShare || fin.costPerShare;
                     const isUnconverted = (fin.asset === "SAFE" || fin.asset === "Convertible Note") && fin.converted === false;
-                    const calculatedShares = isUnconverted ? 0 : (fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0));
-                    const calculatedValue = isUnconverted ? fin.invested : (calculatedShares * displayFMV);
-                    const gl = calculatedValue - fin.invested;
-                    const moic = fin.invested > 0 ? (calculatedValue / fin.invested).toFixed(2) : "—";
-                    
+                    const isUnconvertedWarrant = fin.asset === "Warrants" && fin.converted === false;
+                    const calculatedShares = (isUnconverted || isUnconvertedWarrant) ? 0 : (fin.shares || (fin.costPerShare > 0 ? Math.round(fin.invested / fin.costPerShare) : 0));
+                    const calculatedValue = isUnconvertedWarrant ? 0 : (isUnconverted ? fin.invested : (calculatedShares * displayFMV));
+                    const effectiveInvested = isUnconvertedWarrant ? 0 : fin.invested;
+                    const gl = calculatedValue - effectiveInvested;
+                    const moic = effectiveInvested > 0 ? (calculatedValue / effectiveInvested).toFixed(2) : "—";
+
                     return (
                       <tr key={fin.id} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 44 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>{fin.asset}</span>
-                            {isUnconverted && (
-                              <span style={{ fontSize: 9, background: "#fff3cd", color: "#856404", borderRadius: 4, padding: "1px 5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Unconverted</span>
+                            {(isUnconverted || isUnconvertedWarrant) && (
+                              <span style={{ fontSize: 9, background: "#fff3cd", color: "#856404", borderRadius: 4, padding: "1px 5px", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>{isUnconvertedWarrant ? "Unexercised" : "Unconverted"}</span>
                             )}
                           </div>
                         </td>
                         <td></td>
                         <td style={{ fontSize: 12 }}>{fin.date}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--ink-muted)" }}>
-                          {isUnconverted ? "—" : calculatedShares.toLocaleString()}
+                          {(isUnconverted || isUnconvertedWarrant) ? (isUnconvertedWarrant && fin.shares ? fin.shares.toLocaleString() : "—") : calculatedShares.toLocaleString()}
                         </td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>{fmtMoney(fin.invested)}</td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= fin.invested ? "var(--green)" : "var(--red)" }}>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>
+                          {isUnconvertedWarrant ? <span style={{ color: "var(--ink-muted)" }}>{fin.invested ? fmtMoney(fin.invested) : "—"}</span> : fmtMoney(fin.invested)}
+                        </td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: calculatedValue >= effectiveInvested ? "var(--green)" : "var(--red)" }}>
                           {fmtMoney(calculatedValue)}
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12, color: gl >= 0 ? "var(--green)" : "var(--red)" }}>{gl >= 0 ? "+" : ""}{fmtMoney(gl)}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {isUnconverted ? <span style={{ color: "var(--ink-muted)" }}>—</span> : fin.costPerShare > 0 ? `$${fin.costPerShare.toFixed(2)}` : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
+                          {(isUnconverted || isUnconvertedWarrant) ? <span style={{ color: "var(--ink-muted)" }}>—</span> : fin.costPerShare > 0 ? `$${fin.costPerShare.toFixed(2)}` : <span style={{ color: "var(--ink-muted)" }}>N/A</span>}
                         </td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>
-                          {isUnconverted ? <span style={{ color: "var(--ink-muted)" }}>—</span> : displayFMV > 0 ? (
+                          {(isUnconverted || isUnconvertedWarrant) ? <span style={{ color: "var(--ink-muted)" }}>—</span> : displayFMV > 0 ? (
                             <span style={{ color: comp.manualFMV !== undefined && comp.manualFMV !== null ? "var(--gold-dark)" : finIdx === comp.financings.length - 1 ? "var(--gold-dark)" : "var(--ink-muted)" }}>
                               ${displayFMV.toFixed(2)}
                             </span>
