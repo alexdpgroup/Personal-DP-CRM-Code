@@ -466,12 +466,6 @@ export default function CRM({ session, onLogout }) {
               firm: lp.firm || '',
               email: lp.email || '',
               phone: lp.phone || '',
-              stage: lp.stage || 'outreach',
-              partner: lp.partner || '',
-              fund: lp.fund || null,
-              commitment: lp.commitment || 0,
-              funded: lp.funded || 0,
-              nav: lp.nav || 0,
             })
             .eq('id', lp.id);
           if (error) console.error('Error saving LP:', lp.id, error);
@@ -1551,16 +1545,10 @@ function AddLPDrawer({ onClose, onSave }) {
       const { data: lp, error: lpError } = await supabase
         .from('lps')
         .insert([{
-          name: form.name, // Primary contact name
+          name: form.name,
           firm: form.firm,
           email: form.email,
           phone: form.phone,
-          stage: 'outreach',
-          partner: PARTNERS[0],
-          commitment: 0,
-          funded: 0,
-          nav: 0,
-          fund: null // Will be assigned from fund pages
         }])
         .select()
         .single();
