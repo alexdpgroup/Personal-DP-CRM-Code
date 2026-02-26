@@ -454,8 +454,35 @@ export default function CRM({ session, onLogout }) {
 
   const saveLPs = async (updated) => {
     setLPs(updated);
-    // Save to Supabase instead of browser storage
-    // Note: This will be replaced with proper upsert logic per LP
+    // Persist each changed LP to Supabase
+    for (const lp of updated) {
+      if (lp.id) {
+        try {
+          const { error } = await supabase
+            .from('lps')
+            .update({
+              name: lp.name,
+              firm: lp.firm,
+              email: lp.email,
+              phone: lp.phone,
+              stage: lp.stage,
+              partner: lp.partner,
+              tier: lp.tier,
+              fund: lp.fund,
+              commitment: lp.commitment,
+              funded: lp.funded,
+              nav: lp.nav,
+              notes: lp.notes || [],
+              docs: lp.docs || [],
+              commitments: lp.commitments || [],
+            })
+            .eq('id', lp.id);
+          if (error) console.error('Error saving LP:', lp.id, error);
+        } catch (err) {
+          console.error('Error saving LP:', lp.id, err);
+        }
+      }
+    }
   };
   
   const goFund = (fundName) => { setActiveFund(fundName); setPage("fund"); };
@@ -601,7 +628,7 @@ export default function CRM({ session, onLogout }) {
 
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} onFund={goFund} />}
-            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
+            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} />}
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
@@ -756,29 +783,92 @@ function MiniStat({ label, value }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-// Simple LP Directory - just displays lps, no complex loading
-function LPDirectory({ lps, saveLPs, onPortal }) {
+// ── LP Directory – Portfolio-style expandable table ──
+function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterFund, setFilterFund] = useState("all");
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
-  const [expandedLP, setExpandedLP] = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [addCommitmentFor, setAddCommitmentFor] = useState(null); // lp index
+  const [editCommitment, setEditCommitment] = useState(null); // { lpIdx, commitIdx }
 
-  // Get unique funds from lps
-  const funds = [...new Set((lps || []).map(lp => lp.fund))].filter(Boolean);
+  const fundNames = (fundDefs || []).map(f => f.name);
+  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  // Normalize: migrate legacy flat fund/commitment/funded/nav into commitments[]
+  const normalizedLPs = (lps || []).map(lp => {
+    if (lp.commitments && lp.commitments.length > 0) return lp;
+    // Migrate old flat fields
+    if (lp.fund && lp.commitment) {
+      return { ...lp, commitments: [{ id: 'legacy-' + lp.id, fund: lp.fund, commitment: lp.commitment || 0, funded: lp.funded || 0, nav: lp.nav || 0 }] };
+    }
+    return { ...lp, commitments: lp.commitments || [] };
+  });
+
+  // Get unique funds from commitments
+  const allFunds = [...new Set(normalizedLPs.flatMap(lp => (lp.commitments || []).map(c => c.fund)).filter(Boolean))];
 
   // Filter LPs
-  const filteredLPs = (lps || []).filter(lp => {
+  const filteredLPs = normalizedLPs.filter(lp => {
     const q = search.toLowerCase();
     const matchQ = !q || lp.name?.toLowerCase().includes(q) || lp.firm?.toLowerCase().includes(q);
     const matchPartner = filterPartner === "all" || lp.partner === filterPartner;
-    const matchFund = filterFund === "all" || lp.fund === filterFund;
+    const matchFund = filterFund === "all" || (lp.commitments || []).some(c => c.fund === filterFund);
     return matchQ && matchPartner && matchFund;
   });
 
+  // Totals
+  const totalCommitment = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
+  const totalFunded = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.funded || 0), 0), 0);
+  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.nav || 0), 0), 0);
+
+  const saveLPAtIndex = (lpIdx, updatedLP) => {
+    const updated = lps.map(l => l.id === updatedLP.id ? updatedLP : l);
+    saveLPs(updated);
+    // Also refresh selected if open
+    if (selected && selected.id === updatedLP.id) setSelected(updatedLP);
+  };
+
+  const addCommitment = (lpIdx, commitment) => {
+    const lp = normalizedLPs[lpIdx];
+    const newCommitment = { id: crypto.randomUUID(), ...commitment };
+    const updatedLP = { ...lp, commitments: [...(lp.commitments || []), newCommitment] };
+    saveLPAtIndex(lpIdx, updatedLP);
+  };
+
+  const updateCommitment = (lpIdx, commitIdx, updated) => {
+    const lp = normalizedLPs[lpIdx];
+    const newCommitments = [...(lp.commitments || [])];
+    newCommitments[commitIdx] = { ...newCommitments[commitIdx], ...updated };
+    const updatedLP = { ...lp, commitments: newCommitments };
+    saveLPAtIndex(lpIdx, updatedLP);
+  };
+
+  const deleteCommitment = (lpIdx, commitIdx) => {
+    if (!confirm('Delete this commitment?')) return;
+    const lp = normalizedLPs[lpIdx];
+    const newCommitments = (lp.commitments || []).filter((_, i) => i !== commitIdx);
+    const updatedLP = { ...lp, commitments: newCommitments };
+    saveLPAtIndex(lpIdx, updatedLP);
+  };
+
+  const deleteLP = (lpIdx) => {
+    if (!confirm('Delete this LP and all their commitments?')) return;
+    saveLPs(lps.filter((_, i) => i !== lpIdx));
+  };
+
   return (
     <div>
+      {/* Stat cards */}
+      <div className="stats-row">
+        <StatCard label="Total Commitments" value={fmtMoney(totalCommitment, true)} sub={`${filteredLPs.length} LPs`} />
+        <StatCard label="Total Funded" value={fmtMoney(totalFunded, true)} sub="Capital called" gold />
+        <StatCard label="Total NAV" value={fmtMoney(totalNAV, true)} sub="Net asset value" />
+        <StatCard label="Unfunded" value={fmtMoney(totalCommitment - totalFunded, true)} sub="Remaining to call" />
+      </div>
+
       <div className="toolbar">
         <div className="search-wrap">
           <Icon name="search" size={14} />
@@ -786,7 +876,7 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
         </div>
         <select className="filter-select" value={filterFund} onChange={e => setFilterFund(e.target.value)}>
           <option value="all">All Funds</option>
-          {funds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
+          {allFunds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
         </select>
         <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
           <option value="all">All Partners</option>
@@ -798,51 +888,121 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
       </div>
 
       <div className="card">
-        <div className="card-body">
+        <div className="card-header">
+          <span className="card-title">LP Commitments</span>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
           {filteredLPs.length === 0 ? (
-            <div className="empty">
-              <Icon name="users" size={40} />
-              <h3>No LPs found</h3>
-              <p>Add your first LP to get started</p>
+            <div className="card-body">
+              <div className="empty">
+                <Icon name="users" size={40} />
+                <h3>No LPs found</h3>
+                <p>Add your first LP to get started</p>
+              </div>
             </div>
           ) : (
-            <table>
+            <table style={{ minWidth: 900 }}>
               <thead>
                 <tr>
-                  <th>Investor</th>
-                  <th>Fund</th>
+                  <th style={{ width: 250 }}>Investor</th>
+                  <th>Contact</th>
                   <th>Stage</th>
                   <th>Partner</th>
-                  <th>Commitment</th>
-                  <th>Funded</th>
-                  <th>NAV</th>
+                  <th style={{ textAlign: "right" }}>Commitment</th>
+                  <th style={{ textAlign: "right" }}>Funded</th>
+                  <th style={{ textAlign: "right" }}>NAV</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLPs.map(lp => {
+                {filteredLPs.map((lp, lpIdx) => {
                   const s = stageInfo(lp.stage);
-                  return (
-                    <tr key={lp.id} onClick={() => setSelected(lp)} style={{ cursor: 'pointer' }}>
+                  const commitments = lp.commitments || [];
+                  const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
+                  const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
+                  const lpNAV = commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
+                  const isOpen = expanded[lp.id];
+                  // Find actual index in original lps array
+                  const realIdx = lps.findIndex(l => l.id === lp.id);
+
+                  return [
+                    /* ── LP summary row (accordion header) ── */
+                    <tr key={lp.id + "_header"}
+                      onClick={() => toggleExpand(lp.id)}
+                      style={{ background: "#faf9f6", cursor: "pointer", borderTop: "2px solid var(--border)" }}>
                       <td>
-                        <div className="td-name">{lp.name}</div>
-                        <div className="td-sub">{lp.firm}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{
+                            display: "inline-block", width: 16, height: 16, lineHeight: "16px",
+                            textAlign: "center", fontSize: 10, color: "var(--gold-dark)",
+                            transition: "transform 0.2s",
+                            transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
+                          }}>▶</span>
+                          <div className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{initials(lp.name)}</div>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 14 }}>{lp.firm || lp.name}</div>
+                            <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>
+                              {commitments.length} commitment{commitments.length !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                        </div>
                       </td>
                       <td>
-                        <span className="stat-badge badge-gold">
-                          {lp.fund?.replace('Decisive Point ', '') || '—'}
-                        </span>
+                        <div style={{ fontSize: 13 }}>{lp.name}</div>
+                        <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{lp.email || "—"}</div>
                       </td>
                       <td>
-                        <span className="stat-badge" style={{ background: s.bg, color: s.color }}>
-                          {s.label}
-                        </span>
+                        <span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
                       </td>
                       <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
-                      <td style={{ fontWeight: 500 }}>{lp.commitment ? fmtMoney(lp.commitment) : "—"}</td>
-                      <td style={{ color: 'var(--gold)' }}>{lp.funded ? fmtMoney(lp.funded) : "—"}</td>
-                      <td style={{ color: 'var(--green)' }}>{lp.nav ? fmtMoney(lp.nav) : "—"}</td>
-                    </tr>
-                  );
+                      <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
+                      <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
+                      <td style={{ textAlign: "right", fontWeight: 600, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
+                      <td onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setSelected(lp)} title="View details">
+                            <Icon name="edit" size={12} />
+                          </button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setAddCommitmentFor(realIdx)} title="Add commitment">
+                            <Icon name="plus" size={12} />
+                          </button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => deleteLP(realIdx)} title="Delete LP" style={{ color: 'var(--red)' }}>
+                            <Icon name="close" size={12} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>,
+
+                    /* ── Commitment rows (expanded) ── */
+                    ...(isOpen ? commitments.map((commit, commitIdx) => (
+                      <tr key={lp.id + "-commit-" + commitIdx} style={{ background: "#fff" }}>
+                        <td style={{ paddingLeft: 68 }}>
+                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
+                            {commit.fund ? commit.fund.replace("Decisive Point ", "") : "No fund"}
+                          </span>
+                        </td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
+                        <td style={{ textAlign: "right", fontSize: 12, color: (commit.nav || 0) > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
+                          {commit.nav ? fmtMoney(commit.nav) : "—"}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setEditCommitment({ lpIdx: realIdx, commitIdx })} title="Edit commitment">
+                              <Icon name="edit" size={11} />
+                            </button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => deleteCommitment(realIdx, commitIdx)} title="Delete commitment" style={{ color: 'var(--red)' }}>
+                              <Icon name="close" size={11} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )) : [])
+                  ];
                 })}
               </tbody>
             </table>
@@ -850,16 +1010,135 @@ function LPDirectory({ lps, saveLPs, onPortal }) {
         </div>
       </div>
 
-      {showAdd && <AddLPDrawer onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, newLP]); setShowAdd(false); }} />}
+      {showAdd && <AddLPDrawer onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, { ...newLP, commitments: [] }]); setShowAdd(false); }} />}
+
+      {addCommitmentFor !== null && (
+        <AddCommitmentDrawer
+          lpName={normalizedLPs[addCommitmentFor]?.firm || normalizedLPs[addCommitmentFor]?.name}
+          fundNames={fundNames}
+          onClose={() => setAddCommitmentFor(null)}
+          onSave={(commitment) => { addCommitment(addCommitmentFor, commitment); setAddCommitmentFor(null); }}
+        />
+      )}
+
+      {editCommitment !== null && (
+        <EditCommitmentDrawer
+          lpName={normalizedLPs[editCommitment.lpIdx]?.firm || normalizedLPs[editCommitment.lpIdx]?.name}
+          commitment={normalizedLPs[editCommitment.lpIdx]?.commitments?.[editCommitment.commitIdx]}
+          fundNames={fundNames}
+          onClose={() => setEditCommitment(null)}
+          onSave={(updated) => { updateCommitment(editCommitment.lpIdx, editCommitment.commitIdx, updated); setEditCommitment(null); }}
+        />
+      )}
+
       {selected && (
         <LPDetailDrawer
-          lp={selected}
+          lp={normalizedLPs.find(l => l.id === selected.id) || selected}
           onClose={() => setSelected(null)}
           onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
           onPortal={() => { onPortal(selected); setSelected(null); }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Add Commitment Drawer ──
+function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
+  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, nav: 0 });
+
+  const handleSave = () => {
+    if (!form.fund) { alert('Please select a fund'); return; }
+    onSave(form);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-title">Add Commitment</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 3 }}>{lpName}</div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2"><label>Fund / SPV *</label>
+              <select value={form.fund} onChange={e => setForm({ ...form, fund: e.target.value })}>
+                <option value="">— Select Fund —</option>
+                {fundNames.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Commitment ($)</label>
+              <input type="number" value={form.commitment} onChange={e => setForm({ ...form, commitment: +e.target.value })} placeholder="500000" />
+            </div>
+            <div className="field"><label>Funded ($)</label>
+              <input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} placeholder="0" />
+            </div>
+            <div className="field"><label>NAV ($)</label>
+              <input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} placeholder="0" />
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Add Commitment</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Commitment Drawer ──
+function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }) {
+  const [form, setForm] = useState({
+    fund: commitment?.fund || '',
+    commitment: commitment?.commitment || 0,
+    funded: commitment?.funded || 0,
+    nav: commitment?.nav || 0
+  });
+
+  const handleSave = () => {
+    if (!form.fund) { alert('Please select a fund'); return; }
+    onSave(form);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-title">Edit Commitment</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 3 }}>{lpName}</div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2"><label>Fund / SPV *</label>
+              <select value={form.fund} onChange={e => setForm({ ...form, fund: e.target.value })}>
+                <option value="">— Select Fund —</option>
+                {fundNames.map(fn => <option key={fn} value={fn}>{fn}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Commitment ($)</label>
+              <input type="number" value={form.commitment} onChange={e => setForm({ ...form, commitment: +e.target.value })} />
+            </div>
+            <div className="field"><label>Funded ($)</label>
+              <input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} />
+            </div>
+            <div className="field"><label>NAV ($)</label>
+              <input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} />
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -872,6 +1151,12 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
   const [additionalContacts, setAdditionalContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
   const s = stageInfo(lp.stage);
+
+  // Compute totals from commitments
+  const commitments = lp.commitments || [];
+  const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
+  const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0);
+  const totalNAV = commitments.reduce((s, c) => s + (c.nav || 0), 0);
 
   useEffect(() => {
     if (tab === "contacts") {
@@ -896,7 +1181,7 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
 
   const deleteAdditionalContact = async (contactId) => {
     if (!confirm('Remove this contact?')) return;
-    
+
     try {
       const { error } = await supabase
         .from('lp_additional_contacts')
@@ -914,7 +1199,7 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
   const addNote = () => {
     if (!newNote.trim()) return;
     const note = { date: new Date().toISOString().split("T")[0], author: "You", text: newNote };
-    const updated = { ...lp, notes: [...lp.notes, note] };
+    const updated = { ...lp, notes: [...(lp.notes || []), note] };
     onSave(updated);
     setNewNote("");
   };
@@ -932,14 +1217,14 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
             <div className="flex-row gap-sm" style={{ marginBottom: 6 }}>
               <div className="avatar" style={{ width: 38, height: 38, fontSize: 15 }}>{initials(lp.name)}</div>
               <div>
-                <div className="drawer-title">{lp.name}</div>
-                <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{lp.firm}</div>
+                <div className="drawer-title">{lp.firm || lp.name}</div>
+                <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{lp.name}</div>
               </div>
             </div>
             <div className="flex-row gap-sm" style={{ marginTop: 8 }}>
               <span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
-              <span className="tag">{lp.fund}</span>
               {lp.tier && <span className="badge-gray stat-badge">{lp.tier}</span>}
+              {commitments.length > 0 && <span className="tag">{commitments.length} fund{commitments.length !== 1 ? "s" : ""}</span>}
             </div>
           </div>
           <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
@@ -966,26 +1251,45 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
             <div>
               <div className="detail-meta">
                 <div className="meta-item">
-                  <div className="label">Commitment</div>
-                  <div className="value gold">{lp.commitment ? fmtMoney(lp.commitment) : "TBD"}</div>
+                  <div className="label">Total Commitment</div>
+                  <div className="value gold">{totalCommitment ? fmtMoney(totalCommitment) : "TBD"}</div>
                 </div>
                 <div className="meta-item">
-                  <div className="label">Funded</div>
-                  <div className="value">{lp.funded ? fmtMoney(lp.funded) : "—"}</div>
+                  <div className="label">Total Funded</div>
+                  <div className="value">{totalFunded ? fmtMoney(totalFunded) : "—"}</div>
                 </div>
                 <div className="meta-item">
-                  <div className="label">NAV</div>
-                  <div className="value" style={{ color: lp.nav > lp.funded ? "var(--green)" : undefined }}>{lp.nav ? fmtMoney(lp.nav) : "—"}</div>
+                  <div className="label">Total NAV</div>
+                  <div className="value" style={{ color: totalNAV > totalFunded ? "var(--green)" : undefined }}>{totalNAV ? fmtMoney(totalNAV) : "—"}</div>
                 </div>
               </div>
 
               <div style={{ fontSize: 13.5, lineHeight: 1.8, color: "var(--ink-soft)" }}>
-                <div className="portal-row"><span className="lbl">Email</span><span className="val">{lp.email}</span></div>
-                <div className="portal-row"><span className="lbl">Phone</span><span className="val">{lp.phone}</span></div>
+                <div className="portal-row"><span className="lbl">Contact</span><span className="val">{lp.name}</span></div>
+                <div className="portal-row"><span className="lbl">Email</span><span className="val">{lp.email || "—"}</span></div>
+                <div className="portal-row"><span className="lbl">Phone</span><span className="val">{lp.phone || "—"}</span></div>
                 <div className="portal-row"><span className="lbl">Partner</span><span className="val">{lp.partner}</span></div>
-                <div className="portal-row"><span className="lbl">Tier</span><span className="val">{lp.tier}</span></div>
-                <div className="portal-row"><span className="lbl">Fund</span><span className="val">{lp.fund}</span></div>
+                <div className="portal-row"><span className="lbl">Tier</span><span className="val">{lp.tier || "—"}</span></div>
               </div>
+
+              {/* Commitments summary */}
+              {commitments.length > 0 && (
+                <>
+                  <div className="section-divider"><h3>Fund Commitments</h3></div>
+                  {commitments.map((c, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
+                        {c.fund ? c.fund.replace("Decisive Point ", "") : "No fund"}
+                      </span>
+                      <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+                        <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
+                        <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
+                        <span title="NAV" style={{ color: (c.nav || 0) > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{c.nav ? fmtMoney(c.nav) : "—"}</span>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
 
               {/* Stage changer */}
               <div className="section-divider"><h3>Move Stage</h3></div>
@@ -1005,25 +1309,12 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                   </div>
                 ))}
               </div>
-
-              {lp.distributions && lp.distributions.length > 0 && (
-                <>
-                  <div className="section-divider"><h3>Distributions</h3></div>
-                  {lp.distributions.map((d, i) => (
-                    <div key={i} className="dist-row">
-                      <span style={{ fontSize: 13 }}>{d.date}</span>
-                      <span className="stat-badge badge-green">{d.type}</span>
-                      <span style={{ fontWeight: 600, color: "var(--green)" }}>{fmtMoney(d.amount)}</span>
-                    </div>
-                  ))}
-                </>
-              )}
             </div>
           )}
 
           {tab === "overview" && editing && (
             <div className="form-grid">
-              <div className="field"><label>First & Last Name</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
+              <div className="field"><label>Primary Contact Name</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
               <div className="field"><label>Firm</label><input value={form.firm} onChange={e => setForm({ ...form, firm: e.target.value })} /></div>
               <div className="field"><label>Email</label><input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               <div className="field"><label>Phone</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
@@ -1033,13 +1324,9 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                 </select>
               </div>
               <div className="field"><label>Tier</label>
-                <select value={form.tier} onChange={e => setForm({ ...form, tier: e.target.value })}>
+                <select value={form.tier || ''} onChange={e => setForm({ ...form, tier: e.target.value })}>
+                  <option value="">— None —</option>
                   {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>Fund</label>
-                <select value={form.fund} onChange={e => setForm({ ...form, fund: e.target.value })}>
-                  {FUNDS.map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
               <div className="field"><label>Stage</label>
@@ -1047,9 +1334,6 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                   {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
-              <div className="field"><label>Commitment ($)</label><input type="number" value={form.commitment} onChange={e => setForm({ ...form, commitment: +e.target.value })} /></div>
-              <div className="field"><label>Funded ($)</label><input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} /></div>
-              <div className="field"><label>NAV / Current Mark ($)</label><input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} /></div>
             </div>
           )}
 
@@ -1281,8 +1565,7 @@ function AddLPDrawer({ onClose, onSave }) {
           nav: 0,
           fund: null, // Will be assigned from fund pages
           notes: [],
-          docs: [],
-          distributions: []
+          docs: []
         }])
         .select()
         .single();
@@ -3083,7 +3366,7 @@ function PortalPickerPage({ lps, onSelect }) {
 function InvestorPortal({ lp, onExit }) {
   const totalReturn = lp.nav - lp.funded;
   const returnPct = lp.funded > 0 ? ((lp.nav / lp.funded - 1) * 100).toFixed(1) : 0;
-  const totalDistributions = lp.distributions.reduce((s, d) => s + d.amount, 0);
+  const totalDistributions = (lp.distributions || []).reduce((s, d) => s + d.amount, 0);
   const fundPortfolio = PORTFOLIO.filter(p => p.fund === lp.fund);
 
   return (
@@ -3132,7 +3415,7 @@ function InvestorPortal({ lp, onExit }) {
           <div className="portal-card" style={{ borderTop: "3px solid var(--blue)" }}>
             <h3>Total Distributions</h3>
             <div className="portal-big-num" style={{ color: "var(--blue)" }}>{fmtMoney(totalDistributions)}</div>
-            <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{lp.distributions.length} distribution{lp.distributions.length !== 1 ? "s" : ""} received</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{(lp.distributions || []).length} distribution{(lp.distributions || []).length !== 1 ? "s" : ""} received</div>
           </div>
         </div>
 
@@ -3151,9 +3434,9 @@ function InvestorPortal({ lp, onExit }) {
           {/* Distributions */}
           <div className="portal-card">
             <h3>Distribution History</h3>
-            {lp.distributions.length === 0
+            {(lp.distributions || []).length === 0
               ? <div className="text-muted" style={{ padding: "20px 0" }}>No distributions have been made yet.</div>
-              : lp.distributions.map((d, i) => (
+              : (lp.distributions || []).map((d, i) => (
                   <div key={i} className="dist-row">
                     <span style={{ fontSize: 13 }}>{d.date}</span>
                     <span className="stat-badge badge-green">{d.type}</span>
