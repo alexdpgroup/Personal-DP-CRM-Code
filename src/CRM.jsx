@@ -1591,6 +1591,13 @@ function PortfolioPage({ fundDefs }) {
     }, 0);
   }, 0);
 
+  const totalShares = schedule.reduce((total, comp) => {
+    return total + comp.financings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s;
+      return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
+    }, 0);
+  }, 0);
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
@@ -1916,6 +1923,11 @@ function PortfolioPage({ fundDefs }) {
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
+                const compShares   = comp.financings.reduce((s, f) => {
+                  const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+                  if (isUnconverted) return s;
+                  return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
+                }, 0);
                 const compGL       = compValue - compInvested;
                 const compMOIC     = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
                 const isOpen       = expanded[comp.company];
@@ -1954,7 +1966,7 @@ function PortfolioPage({ fundDefs }) {
                       </span>
                     </td>
                     <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{compShares.toLocaleString()}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
@@ -2126,7 +2138,8 @@ function PortfolioPage({ fundDefs }) {
 
               {/* ── Grand totals row ── */}
               <tr style={{ background: "var(--ink)", color: "#fff", borderTop: "2px solid var(--border)" }}>
-                <td colSpan={5} style={{ fontWeight: 600, fontSize: 13, color: "#fff", paddingLeft: 18 }}>Total Portfolio</td>
+                <td colSpan={4} style={{ fontWeight: 600, fontSize: 13, color: "#fff", paddingLeft: 18 }}>Total Portfolio</td>
+                <td style={{ textAlign: "right", fontWeight: 700, color: "var(--gold-light)" }}>{totalShares.toLocaleString()}</td>
                 <td style={{ textAlign: "right", fontWeight: 700, color: "var(--gold-light)" }}>{fmtMoney(totalInvested)}</td>
                 <td style={{ textAlign: "right", fontWeight: 700, color: totalValue >= totalInvested ? "#a8f0c6" : "#f0a8a8" }}>{fmtMoney(totalValue)}</td>
                 <td style={{ textAlign: "right", fontWeight: 700, color: totalGainLoss >= 0 ? "#a8f0c6" : "#f0a8a8" }}>{totalGainLoss >= 0 ? "+" : ""}{fmtMoney(totalGainLoss)}</td>
@@ -3621,6 +3634,13 @@ function FundPortfolioTab({ portfolio, fundName }) {
     }, 0);
   }, 0);
 
+  const totalShares = fundPortfolio.reduce((total, comp) => {
+    return total + comp.financings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s;
+      return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
+    }, 0);
+  }, 0);
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
@@ -3688,6 +3708,11 @@ function FundPortfolioTab({ portfolio, fundName }) {
                   const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
                   return s + (shares * fmv);
                 }, 0);
+                const compShares = comp.financings.reduce((s, f) => {
+                  const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+                  if (isUnconverted) return s;
+                  return s + (f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0));
+                }, 0);
                 const compGL = compValue - compInvested;
                 const compMOIC = compInvested > 0 ? (compValue / compInvested).toFixed(2) : "—";
                 const isOpen = expanded[comp.company];
@@ -3713,7 +3738,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
                     </td>
                     <td><span className="badge-blue stat-badge">{comp.sector}</span></td>
                     <td style={{ color: "var(--ink-muted)", fontSize: 12 }}>—</td>
-                    <td style={{ textAlign: "right", color: "var(--ink-muted)" }}>—</td>
+                    <td style={{ textAlign: "right", fontWeight: 600 }}>{compShares.toLocaleString()}</td>
                     <td style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(compInvested)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compValue >= compInvested ? "var(--green)" : "var(--red)" }}>{fmtMoney(compValue)}</td>
                     <td style={{ textAlign: "right", fontWeight: 600, color: compGL >= 0 ? "var(--green)" : "var(--red)" }}>{compGL >= 0 ? "+" : ""}{fmtMoney(compGL)}</td>
@@ -3774,7 +3799,8 @@ function FundPortfolioTab({ portfolio, fundName }) {
 
               {/* Grand totals row */}
               <tr style={{ background: "var(--ink)", color: "#fff", borderTop: "2px solid var(--border)" }}>
-                <td colSpan={4} style={{ fontWeight: 600, fontSize: 13, color: "#fff", paddingLeft: 18 }}>Fund Total</td>
+                <td colSpan={3} style={{ fontWeight: 600, fontSize: 13, color: "#fff", paddingLeft: 18 }}>Fund Total</td>
+                <td style={{ textAlign: "right", fontWeight: 700, color: "var(--gold-light)" }}>{totalShares.toLocaleString()}</td>
                 <td style={{ textAlign: "right", fontWeight: 700, color: "var(--gold-light)" }}>{fmtMoney(totalInvested)}</td>
                 <td style={{ textAlign: "right", fontWeight: 700, color: totalValue >= totalInvested ? "#a8f0c6" : "#f0a8a8" }}>{fmtMoney(totalValue)}</td>
                 <td style={{ textAlign: "right", fontWeight: 700, color: totalGainLoss >= 0 ? "#a8f0c6" : "#f0a8a8" }}>{totalGainLoss >= 0 ? "+" : ""}{fmtMoney(totalGainLoss)}</td>
