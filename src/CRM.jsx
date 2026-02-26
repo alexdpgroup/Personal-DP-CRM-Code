@@ -1521,6 +1521,7 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
     firm: "",
     email: "",
     phone: "",
+    partner: PARTNERS[0],
     additionalContacts: []
   });
 
@@ -1612,6 +1613,11 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
             <div className="field span2"><label>Primary Contact Name *</label><input value={form.name} onChange={f("name")} placeholder="Thomas Hendrix" /></div>
             <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="thomas@trophypoint.com" /></div>
             <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
+            <div className="field"><label>Partner</label>
+              <select value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })}>
+                {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+              </select>
+            </div>
           </div>
 
           {/* Additional Contacts */}
