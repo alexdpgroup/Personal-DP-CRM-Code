@@ -1784,7 +1784,7 @@ function PortfolioPage({ fundDefs }) {
         .insert({
           company_id: company.companyId,
           asset: fin.asset,
-          fund: company.fund || '',
+          fund: fin.fund || '',
           date: fin.date,
           invested: fin.invested,
           shares: fin.shares || 0,
@@ -1796,14 +1796,14 @@ function PortfolioPage({ fundDefs }) {
         .single();
       
       if (error) throw error;
-      
-      // Update local state - inherit fund from company
+
+      // Update local state
       const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
-        ...c, 
+        ...c,
         financings: [...c.financings, {
           id: newFin.id,
           asset: newFin.asset,
-          fund: newFin.fund || company.fund || '', // Inherit from company, not from financing record
+          fund: newFin.fund || '',
           date: newFin.date,
           invested: parseFloat(newFin.invested) || 0,
           shares: parseInt(newFin.shares) || 0,
@@ -2185,6 +2185,7 @@ function PortfolioPage({ fundDefs }) {
 function AddFinancingModal({ company, fundNames, onClose, onSave }) {
   const [form, setForm] = useState({
     asset: "SAFE",
+    fund: "",
     date: "",
     invested: 0,
     costPerShare: 0,
@@ -2244,9 +2245,15 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
         </div>
         <div className="drawer-body">
           <div className="form-grid">
-            <div className="field span2"><label>Asset / Round</label>
+            <div className="field"><label>Asset / Round</label>
               <select value={form.asset} onChange={f("asset")}>
                 {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
+              </select>
+            </div>
+            <div className="field"><label>Fund</label>
+              <select value={form.fund} onChange={f("fund")}>
+                <option value="">— No fund —</option>
+                {fundNames.map(fn => <option key={fn} value={fn}>{fn}</option>)}
               </select>
             </div>
 
