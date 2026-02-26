@@ -2260,7 +2260,7 @@ function AddFinancingModal({ company, fundNames, onClose, onSave }) {
           <div className="form-grid">
             <div className="field"><label>Asset / Round</label>
               <select value={form.asset} onChange={f("asset")}>
-                {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
+                {["SAFE","Convertible Note","Warrants","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
               </select>
             </div>
             <div className="field"><label>Fund</label>
@@ -2488,7 +2488,7 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
           <div className="form-grid">
             <div className="field"><label>Asset / Round</label>
               <select value={form.asset} onChange={f("asset")}>
-                {["SAFE","Convertible Note","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
+                {["SAFE","Convertible Note","Warrants","Seed","Series A","Series A-1","Series B","Series C","Series D","Bridge","Other"].map(a => <option key={a}>{a}</option>)}
               </select>
             </div>
             <div className="field"><label>Fund</label>
