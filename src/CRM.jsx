@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "./supabaseClient";
 
 // Make supabase available globally for components
@@ -733,9 +733,24 @@ function DashboardPage({ lps, fundDefs, onFund }) {
         </div>
         <div className="card-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 20 }}>
           {funds.map(fd => {
-            const fundLPs = safeLps.filter(l => l.fund === fd.name);
-            const committed = fundLPs.reduce((s, l) => s + (l.commitment || 0), 0);
-            const funded = fundLPs.reduce((s, l) => s + (l.funded || 0), 0);
+            const fundLPs = safeLps.filter(l =>
+              l.fund === fd.name ||
+              (l.commitments && l.commitments.some(c => c.fund === fd.name))
+            );
+            const committed = fundLPs.reduce((s, l) => {
+              if (l.commitments && l.commitments.length > 0) {
+                const fc = l.commitments.find(c => c.fund === fd.name);
+                return s + (fc?.commitment || 0);
+              }
+              return s + (l.commitment || 0);
+            }, 0);
+            const funded = fundLPs.reduce((s, l) => {
+              if (l.commitments && l.commitments.length > 0) {
+                const fc = l.commitments.find(c => c.fund === fd.name);
+                return s + (fc?.funded || 0);
+              }
+              return s + (l.funded || 0);
+            }, 0);
             const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
             const oversubscribed = committed > fd.target;
             const shortName = fd.name.replace("Decisive Point ", "");
@@ -3774,22 +3789,49 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
     }
   };
 
+  // Merge LPs that have commitments labeled for this fund (from lp_commitments table)
+  const allInvestments = useMemo(() => {
+    if (!lps) return investments;
+    const investmentIds = new Set(investments.map(inv => inv.id));
+    const investmentParentIds = new Set(investments.map(inv => inv.parent_lp_id).filter(Boolean));
+
+    const commitmentBasedLPs = lps
+      .filter(lp => {
+        const hasCommitment = lp.commitments?.some(c => c.fund === fundName);
+        if (!hasCommitment) return false;
+        // Skip if already represented in fund_id-based investments
+        return !investmentIds.has(lp.id) && !investmentParentIds.has(lp.id);
+      })
+      .map(lp => {
+        const commitment = lp.commitments.find(c => c.fund === fundName);
+        return {
+          ...lp,
+          commitment: commitment?.commitment || 0,
+          funded: commitment?.funded || 0,
+          nav: commitment?.nav || 0,
+          contact: lp,
+        };
+      });
+
+    return [...investments, ...commitmentBasedLPs];
+  }, [lps, fundName, investments]);
+
   if (loading) {
     return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
   }
 
-  const closedInvestments = investments.filter(inv => inv.stage === "closed");
-  const pipelineInvestments = investments.filter(inv => inv.stage !== "closed");
-  const committed = investments.reduce((s, inv) => s + (inv.commitment || 0), 0);
-  const funded = investments.reduce((s, inv) => s + (inv.funded || 0), 0);
-  const nav = investments.reduce((s, inv) => s + (inv.nav || 0), 0);
+  const closedInvestments = allInvestments.filter(inv => inv.stage === "closed");
+  const pipelineInvestments = allInvestments.filter(inv => inv.stage !== "closed");
+  const committed = allInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
+  const nav = allInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
   const shortName = fundName.replace("Decisive Point ", "");
 
   // pipeline by stage
   const byStage = STAGES.map(s => ({
-    ...s, lps: investments.filter(inv => inv.stage === s.id),
+    ...s, lps: allInvestments.filter(inv => inv.stage === s.id),
   }));
 
   return (
@@ -3991,7 +4033,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           <span className="card-title">All LPs — {shortName}</span>
         </div>
         <div className="card-body">
-          {investments.length === 0
+          {allInvestments.length === 0
             ? <div className="empty"><p>No LPs assigned to this fund yet.</p></div>
             : (
               <table>
@@ -4006,7 +4048,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {investments.map(inv => {
+                  {allInvestments.map(inv => {
                     const s = stageInfo(inv.stage);
                     const contactName = inv.contact?.name || inv.name || 'Unknown';
                     const contactFirm = inv.contact?.firm || inv.firm || '';
