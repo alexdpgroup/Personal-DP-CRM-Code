@@ -430,6 +430,35 @@ export default function CRM({ session, onLogout }) {
 
       if (lpsError) throw lpsError;
 
+      // Load LP commitments from Supabase
+      let commitmentsData = [];
+      try {
+        const { data: commitments, error: commitmentsError } = await supabase
+          .from('lp_commitments')
+          .select('*');
+        if (commitmentsError) {
+          console.warn('lp_commitments table not found or error:', commitmentsError.message);
+        } else {
+          commitmentsData = commitments || [];
+        }
+      } catch (err) {
+        console.warn('Could not load lp_commitments:', err);
+      }
+
+      // Attach commitments to their LPs
+      const lpsWithCommitments = (lpsData || []).map(lp => {
+        const lpCommitments = commitmentsData
+          .filter(c => c.lp_id === lp.id)
+          .map(c => ({
+            id: c.id,
+            fund: c.fund || '',
+            commitment: parseFloat(c.commitment) || 0,
+            funded: parseFloat(c.funded) || 0,
+            nav: parseFloat(c.nav) || 0,
+          }));
+        return { ...lp, commitments: lpCommitments };
+      });
+
       // Transform funds to match expected format
       const transformedFunds = funds?.map(f => ({
         id: f.id,
@@ -443,7 +472,7 @@ export default function CRM({ session, onLogout }) {
       console.log('🔍 Fund names:', transformedFunds.map(f => f.name));
 
       setFundDefs(transformedFunds.length > 0 ? transformedFunds : FUND_DEFS);
-      setLPs(lpsData || []);
+      setLPs(lpsWithCommitments);
       setLoading(false);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -460,14 +489,18 @@ export default function CRM({ session, onLogout }) {
     for (const lp of updated) {
       if (lp.id) {
         try {
+          const updateFields = {
+            name: lp.name || '',
+            firm: lp.firm || '',
+            email: lp.email || '',
+            phone: lp.phone || '',
+          };
+          if (lp.stage) updateFields.stage = lp.stage;
+          if (lp.partner !== undefined) updateFields.partner = lp.partner || '';
+
           const { error } = await supabase
             .from('lps')
-            .update({
-              name: lp.name || '',
-              firm: lp.firm || '',
-              email: lp.email || '',
-              phone: lp.phone || '',
-            })
+            .update(updateFields)
             .eq('id', lp.id);
           if (error) console.error('Error saving LP:', lp.id, error);
         } catch (err) {
@@ -640,9 +673,19 @@ export default function CRM({ session, onLogout }) {
 function DashboardPage({ lps, fundDefs, onFund }) {
   const safeLps = lps || [];
   const closed = safeLps.filter(l => l.stage === "closed");
-  const totalCommit = safeLps.reduce((s, l) => s + (l.commitment || 0), 0);
-  const totalFunded = safeLps.reduce((s, l) => s + (l.funded || 0), 0);
-  const totalNAV = safeLps.reduce((s, l) => s + (l.nav || 0), 0);
+  // Sum from commitments[] array if available, otherwise use flat fields
+  const totalCommit = safeLps.reduce((s, l) => {
+    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
+    return s + (l.commitment || 0);
+  }, 0);
+  const totalFunded = safeLps.reduce((s, l) => {
+    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
+    return s + (l.funded || 0);
+  }, 0);
+  const totalNAV = safeLps.reduce((s, l) => {
+    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
+    return s + (l.nav || 0);
+  }, 0);
   const pipelineCount = safeLps.filter(l => l.stage !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
 
@@ -823,27 +866,104 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
     if (selected && selected.id === updatedLP.id) setSelected(updatedLP);
   };
 
-  const addCommitment = (lpIdx, commitment) => {
+  const addCommitment = async (lpIdx, commitment) => {
     const lp = normalizedLPs[lpIdx];
-    const newCommitment = { id: crypto.randomUUID(), ...commitment };
-    const updatedLP = { ...lp, commitments: [...(lp.commitments || []), newCommitment] };
-    saveLPAtIndex(lpIdx, updatedLP);
+    try {
+      const { data: newRow, error } = await supabase
+        .from('lp_commitments')
+        .insert({
+          lp_id: lp.id,
+          fund: commitment.fund || '',
+          commitment: commitment.commitment || 0,
+          funded: commitment.funded || 0,
+          nav: commitment.nav || 0,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newCommitment = {
+        id: newRow.id,
+        fund: newRow.fund || '',
+        commitment: parseFloat(newRow.commitment) || 0,
+        funded: parseFloat(newRow.funded) || 0,
+        nav: parseFloat(newRow.nav) || 0,
+      };
+      const updatedLP = { ...lp, commitments: [...(lp.commitments || []), newCommitment] };
+      saveLPAtIndex(lpIdx, updatedLP);
+    } catch (error) {
+      console.error('Error adding commitment:', error);
+      alert('Error adding commitment: ' + error.message);
+    }
   };
 
-  const updateCommitment = (lpIdx, commitIdx, updated) => {
+  const updateCommitment = async (lpIdx, commitIdx, updated) => {
     const lp = normalizedLPs[lpIdx];
-    const newCommitments = [...(lp.commitments || [])];
-    newCommitments[commitIdx] = { ...newCommitments[commitIdx], ...updated };
-    const updatedLP = { ...lp, commitments: newCommitments };
-    saveLPAtIndex(lpIdx, updatedLP);
+    const existingCommitment = (lp.commitments || [])[commitIdx];
+    if (!existingCommitment) return;
+
+    const isLegacy = String(existingCommitment.id).startsWith('legacy-');
+    const merged = {
+      fund: updated.fund !== undefined ? updated.fund : existingCommitment.fund,
+      commitment: updated.commitment !== undefined ? updated.commitment : existingCommitment.commitment,
+      funded: updated.funded !== undefined ? updated.funded : existingCommitment.funded,
+      nav: updated.nav !== undefined ? updated.nav : existingCommitment.nav,
+    };
+
+    try {
+      let newId = existingCommitment.id;
+      if (isLegacy) {
+        // Migrate legacy commitment to lp_commitments table
+        const { data: newRow, error } = await supabase
+          .from('lp_commitments')
+          .insert({ lp_id: lp.id, ...merged })
+          .select()
+          .single();
+        if (error) throw error;
+        newId = newRow.id;
+      } else {
+        const { error } = await supabase
+          .from('lp_commitments')
+          .update(merged)
+          .eq('id', existingCommitment.id);
+        if (error) throw error;
+      }
+
+      const newCommitments = [...(lp.commitments || [])];
+      newCommitments[commitIdx] = { ...merged, id: newId };
+      const updatedLP = { ...lp, commitments: newCommitments };
+      saveLPAtIndex(lpIdx, updatedLP);
+    } catch (error) {
+      console.error('Error updating commitment:', error);
+      alert('Error updating commitment: ' + error.message);
+    }
   };
 
-  const deleteCommitment = (lpIdx, commitIdx) => {
+  const deleteCommitment = async (lpIdx, commitIdx) => {
     if (!confirm('Delete this commitment?')) return;
     const lp = normalizedLPs[lpIdx];
-    const newCommitments = (lp.commitments || []).filter((_, i) => i !== commitIdx);
-    const updatedLP = { ...lp, commitments: newCommitments };
-    saveLPAtIndex(lpIdx, updatedLP);
+    const commitmentToDelete = (lp.commitments || [])[commitIdx];
+    if (!commitmentToDelete) return;
+
+    const isLegacy = String(commitmentToDelete.id).startsWith('legacy-');
+
+    try {
+      if (!isLegacy) {
+        const { error } = await supabase
+          .from('lp_commitments')
+          .delete()
+          .eq('id', commitmentToDelete.id);
+        if (error) throw error;
+      }
+
+      const newCommitments = (lp.commitments || []).filter((_, i) => i !== commitIdx);
+      const updatedLP = { ...lp, commitments: newCommitments };
+      saveLPAtIndex(lpIdx, updatedLP);
+    } catch (error) {
+      console.error('Error deleting commitment:', error);
+      alert('Error deleting commitment: ' + error.message);
+    }
   };
 
   const deleteLP = (lpIdx) => {
@@ -1728,7 +1848,10 @@ function PipelinePage({ lps, saveLPs }) {
       <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <p className="text-muted">Drag LPs through stages by clicking a card and changing its stage below.</p>
         <div style={{ fontFamily: "var(--serif)", color: "var(--gold-dark)", fontSize: 15 }}>
-          {lps.filter(l => l.stage === "closed").length} closed · {fmtMoney(lps.filter(l => l.stage === "closed").reduce((s, l) => s + l.commitment, 0), true)} committed
+          {lps.filter(l => l.stage === "closed").length} closed · {fmtMoney(lps.filter(l => l.stage === "closed").reduce((s, l) => {
+            if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
+            return s + (l.commitment || 0);
+          }, 0), true)} committed
         </div>
       </div>
 
@@ -1745,7 +1868,7 @@ function PipelinePage({ lps, saveLPs }) {
                 <div key={lp.id} className="kanban-card" onClick={() => setSelected(lp)}>
                   <div className="name">{lp.name}</div>
                   <div className="firm">{lp.firm}</div>
-                  {lp.commitment > 0 && <div className="amount">{fmtMoney(lp.commitment, true)}</div>}
+                  {((lp.commitments && lp.commitments.length > 0 ? lp.commitments.reduce((s, c) => s + (c.commitment || 0), 0) : lp.commitment) || 0) > 0 && <div className="amount">{fmtMoney(lp.commitments && lp.commitments.length > 0 ? lp.commitments.reduce((s, c) => s + (c.commitment || 0), 0) : lp.commitment, true)}</div>}
                   <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 5 }}>{lp.partner}</div>
                 </div>
               ))}
@@ -3329,7 +3452,12 @@ Send them the portal URL and their credentials. They'll only see their own inves
 // ── PORTAL PICKER (for internal preview) ──────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function PortalPickerPage({ lps, onSelect }) {
-  const eligible = lps.filter(l => l.stage === "closed" && l.commitment > 0);
+  const eligible = lps.filter(l => {
+    const totalCommit = (l.commitments && l.commitments.length > 0)
+      ? l.commitments.reduce((s, c) => s + (c.commitment || 0), 0)
+      : (l.commitment || 0);
+    return l.stage === "closed" && totalCommit > 0;
+  });
 
   return (
     <div>
