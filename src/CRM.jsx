@@ -332,6 +332,16 @@ function initials(name) {
 }
 
 function stageInfo(id) { return STAGES.find(s => s.id === id) || STAGES[0]; }
+function mostAdvancedStage(commitments) {
+  if (!commitments || commitments.length === 0) return "outreach";
+  const stageOrder = STAGES.map(s => s.id);
+  let best = 0;
+  for (const c of commitments) {
+    const idx = stageOrder.indexOf(c.stage || "outreach");
+    if (idx > best) best = idx;
+  }
+  return stageOrder[best];
+}
 
 // ── Icons (inline SVG) ───────────────────────────────────────────────────────
 const Icon = ({ name, size = 16 }) => {
@@ -455,6 +465,7 @@ export default function CRM({ session, onLogout }) {
             commitment: parseFloat(c.commitment) || 0,
             funded: parseFloat(c.funded) || 0,
             nav: parseFloat(c.nav) || 0,
+            stage: c.stage || 'outreach',
           }));
         return { ...lp, commitments: lpCommitments };
       });
@@ -503,6 +514,19 @@ export default function CRM({ session, onLogout }) {
             .update(updateFields)
             .eq('id', lp.id);
           if (error) console.error('Error saving LP:', lp.id, error);
+
+          // Persist per-commitment stage changes
+          if (lp.commitments) {
+            for (const c of lp.commitments) {
+              if (c.id && !String(c.id).startsWith('legacy-') && c.stage) {
+                const { error: cErr } = await supabase
+                  .from('lp_commitments')
+                  .update({ stage: c.stage })
+                  .eq('id', c.id);
+                if (cErr) console.error('Error saving commitment stage:', c.id, cErr);
+              }
+            }
+          }
         } catch (err) {
           console.error('Error saving LP:', lp.id, err);
         }
@@ -672,7 +696,8 @@ export default function CRM({ session, onLogout }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function DashboardPage({ lps, fundDefs, onFund }) {
   const safeLps = lps || [];
-  const closed = safeLps.filter(l => l.stage === "closed");
+  const getLPStage = (l) => l.commitments?.length > 0 ? mostAdvancedStage(l.commitments) : (l.stage || "outreach");
+  const closed = safeLps.filter(l => getLPStage(l) === "closed");
   // Sum from commitments[] array if available, otherwise use flat fields
   const totalCommit = safeLps.reduce((s, l) => {
     if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
@@ -686,7 +711,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
     if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
     return s + (l.nav || 0);
   }, 0);
-  const pipelineCount = safeLps.filter(l => l.stage !== "closed").length;
+  const pipelineCount = safeLps.filter(l => getLPStage(l) !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
 
   return (
@@ -705,7 +730,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
         <div className="card-body">
           {safeLps.filter(l => l.notes?.length > 0).slice(0, 6).map(lp => {
             const last = lp.notes[lp.notes.length - 1];
-            const s = stageInfo(lp.stage);
+            const s = stageInfo(getLPStage(lp));
             return (
               <div key={lp.id} style={{ display: "flex", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
                 <div className="avatar">{initials(lp.name)}</div>
@@ -776,7 +801,7 @@ function DashboardPage({ lps, fundDefs, onFund }) {
                   <div style={{ display: "flex", gap: 20, fontSize: 13 }}>
                     <span style={{ color: "var(--ink-muted)" }}>Target <b style={{ color: "var(--ink)" }}>{fmtMoney(fd.target, true)}</b></span>
                     <span style={{ color: "var(--ink-muted)" }}>Raised <b style={{ color: oversubscribed ? "var(--green)" : "var(--gold-dark)" }}>{fmtMoney(committed, true)}</b></span>
-                    <span style={{ color: "var(--ink-muted)" }}>LPs <b style={{ color: "var(--ink)" }}>{fundLPs.filter(l => l.stage === "closed").length}</b></span>
+                    <span style={{ color: "var(--ink-muted)" }}>LPs <b style={{ color: "var(--ink)" }}>{fundLPs.filter(l => getLPStage(l) === "closed").length}</b></span>
                   </div>
                 </div>
                 {/* Progress bar — can overflow for oversubscribed */}
@@ -892,6 +917,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
           commitment: commitment.commitment || 0,
           funded: commitment.funded || 0,
           nav: commitment.nav || 0,
+          stage: commitment.stage || lp.stage || 'outreach',
         })
         .select()
         .single();
@@ -904,6 +930,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
         commitment: parseFloat(newRow.commitment) || 0,
         funded: parseFloat(newRow.funded) || 0,
         nav: parseFloat(newRow.nav) || 0,
+        stage: newRow.stage || 'outreach',
       };
       const updatedLP = { ...lp, commitments: [...(lp.commitments || []), newCommitment] };
       saveLPAtIndex(lpIdx, updatedLP);
@@ -924,6 +951,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
       commitment: updated.commitment !== undefined ? updated.commitment : existingCommitment.commitment,
       funded: updated.funded !== undefined ? updated.funded : existingCommitment.funded,
       nav: updated.nav !== undefined ? updated.nav : existingCommitment.nav,
+      stage: updated.stage !== undefined ? updated.stage : existingCommitment.stage || 'outreach',
     };
 
     try {
@@ -1045,8 +1073,9 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
               </thead>
               <tbody>
                 {filteredLPs.map((lp, lpIdx) => {
-                  const s = stageInfo(lp.stage);
                   const commitments = lp.commitments || [];
+                  const derivedStage = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || "outreach");
+                  const s = stageInfo(derivedStage);
                   const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
                   const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
                   const lpNAV = commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
@@ -1114,7 +1143,9 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                     </tr>,
 
                     /* ── Commitment rows (expanded) ── */
-                    ...(isOpen ? commitments.map((commit, commitIdx) => (
+                    ...(isOpen ? commitments.map((commit, commitIdx) => {
+                      const cs = stageInfo(commit.stage || "outreach");
+                      return (
                       <tr key={lp.id + "-commit-" + commitIdx} style={{ background: "#fff" }}>
                         <td style={{ paddingLeft: 68 }}>
                           <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
@@ -1123,7 +1154,9 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                         </td>
                         <td></td>
                         <td></td>
-                        <td></td>
+                        <td>
+                          <span className="stat-badge" style={{ background: cs.bg, color: cs.color, fontSize: 11 }}>{cs.label}</span>
+                        </td>
                         <td></td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
@@ -1141,7 +1174,8 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                           </div>
                         </td>
                       </tr>
-                    )) : [])
+                      );
+                    }) : [])
                   ];
                 })}
               </tbody>
@@ -1186,7 +1220,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
 
 // ── Add Commitment Drawer ──
 function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
-  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, nav: 0 });
+  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, nav: 0, stage: 'outreach' });
 
   const handleSave = () => {
     if (!form.fund) { alert('Please select a fund'); return; }
@@ -1220,6 +1254,11 @@ function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
             <div className="field"><label>NAV ($)</label>
               <input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} placeholder="0" />
             </div>
+            <div className="field span2"><label>Stage</label>
+              <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
+                {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <div className="drawer-footer">
@@ -1237,7 +1276,8 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
     fund: commitment?.fund || '',
     commitment: commitment?.commitment || 0,
     funded: commitment?.funded || 0,
-    nav: commitment?.nav || 0
+    nav: commitment?.nav || 0,
+    stage: commitment?.stage || 'outreach',
   });
 
   const handleSave = () => {
@@ -1272,6 +1312,11 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
             <div className="field"><label>NAV ($)</label>
               <input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} />
             </div>
+            <div className="field span2"><label>Stage</label>
+              <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
+                {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
           </div>
         </div>
         <div className="drawer-footer">
@@ -1290,10 +1335,10 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
   const [newNote, setNewNote] = useState("");
   const [additionalContacts, setAdditionalContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
-  const s = stageInfo(lp.stage);
-
   // Compute totals from commitments
   const commitments = lp.commitments || [];
+  const derivedStage = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || "outreach");
+  const s = stageInfo(derivedStage);
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0);
   const totalNAV = commitments.reduce((s, c) => s + (c.nav || 0), 0);
@@ -1412,43 +1457,51 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                 <div className="portal-row"><span className="lbl">Tier</span><span className="val">{lp.tier || "—"}</span></div>
               </div>
 
-              {/* Commitments summary */}
+              {/* Commitments with per-commitment stage */}
               {commitments.length > 0 && (
                 <>
                   <div className="section-divider"><h3>Fund Commitments</h3></div>
-                  {commitments.map((c, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
-                        {c.fund ? c.fund.replace("Decisive Point ", "") : "No fund"}
-                      </span>
-                      <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
-                        <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
-                        <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
-                        <span title="NAV" style={{ color: (c.nav || 0) > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{c.nav ? fmtMoney(c.nav) : "—"}</span>
+                  {commitments.map((c, i) => {
+                    const cStage = stageInfo(c.stage || "outreach");
+                    return (
+                      <div key={i} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
+                            {c.fund ? c.fund.replace("Decisive Point ", "") : "No fund"}
+                          </span>
+                          <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+                            <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
+                            <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
+                            <span title="NAV" style={{ color: (c.nav || 0) > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{c.nav ? fmtMoney(c.nav) : "—"}</span>
+                          </div>
+                        </div>
+                        <div className="pipeline-bar" style={{ gap: 4 }}>
+                          {STAGES.map(st => (
+                            <div
+                              key={st.id}
+                              className="pipeline-stage"
+                              style={{
+                                background: (c.stage || "outreach") === st.id ? st.bg : "#f7f6f2",
+                                color: (c.stage || "outreach") === st.id ? st.color : "var(--ink-muted)",
+                                border: (c.stage || "outreach") === st.id ? `1.5px solid ${st.color}` : "1.5px solid var(--border)",
+                                fontSize: 10,
+                                padding: "4px 6px",
+                              }}
+                              onClick={() => {
+                                const updatedCommitments = [...commitments];
+                                updatedCommitments[i] = { ...c, stage: st.id };
+                                onSave({ ...lp, commitments: updatedCommitments });
+                              }}
+                            >
+                              {st.label}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
-
-              {/* Stage changer */}
-              <div className="section-divider"><h3>Move Stage</h3></div>
-              <div className="pipeline-bar">
-                {STAGES.map(st => (
-                  <div
-                    key={st.id}
-                    className="pipeline-stage"
-                    style={{
-                      background: lp.stage === st.id ? st.bg : "#f7f6f2",
-                      color: lp.stage === st.id ? st.color : "var(--ink-muted)",
-                      border: lp.stage === st.id ? `1.5px solid ${st.color}` : "1.5px solid var(--border)",
-                    }}
-                    onClick={() => onSave({ ...lp, stage: st.id })}
-                  >
-                    {st.label}
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
@@ -1467,11 +1520,6 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                 <select value={form.tier || ''} onChange={e => setForm({ ...form, tier: e.target.value })}>
                   <option value="">— None —</option>
                   {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="field"><label>Stage</label>
-                <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
-                  {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                 </select>
               </div>
             </div>
@@ -1849,13 +1897,17 @@ function AddAdditionalContactModal({ onClose, onSave }) {
 function PipelinePage({ lps, saveLPs }) {
   const [selected, setSelected] = useState(null);
 
+  const getLPStage = (l) => l.commitments?.length > 0 ? mostAdvancedStage(l.commitments) : (l.stage || "outreach");
+
   const byStage = STAGES.map(s => ({
     ...s,
-    lps: lps.filter(l => l.stage === s.id),
+    lps: lps.filter(l => getLPStage(l) === s.id),
   }));
 
   const moveStage = (lp, stage) => {
-    saveLPs(lps.map(l => l.id === lp.id ? { ...l, stage } : l));
+    // Update all commitments to the new stage
+    const updatedCommitments = (lp.commitments || []).map(c => ({ ...c, stage }));
+    saveLPs(lps.map(l => l.id === lp.id ? { ...l, stage, commitments: updatedCommitments } : l));
   };
 
   return (
@@ -1863,7 +1915,7 @@ function PipelinePage({ lps, saveLPs }) {
       <div style={{ marginBottom: 18, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <p className="text-muted">Drag LPs through stages by clicking a card and changing its stage below.</p>
         <div style={{ fontFamily: "var(--serif)", color: "var(--gold-dark)", fontSize: 15 }}>
-          {lps.filter(l => l.stage === "closed").length} closed · {fmtMoney(lps.filter(l => l.stage === "closed").reduce((s, l) => {
+          {lps.filter(l => getLPStage(l) === "closed").length} closed · {fmtMoney(lps.filter(l => getLPStage(l) === "closed").reduce((s, l) => {
             if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
             return s + (l.commitment || 0);
           }, 0), true)} committed
@@ -3471,7 +3523,8 @@ function PortalPickerPage({ lps, onSelect }) {
     const totalCommit = (l.commitments && l.commitments.length > 0)
       ? l.commitments.reduce((s, c) => s + (c.commitment || 0), 0)
       : (l.commitment || 0);
-    return l.stage === "closed" && totalCommit > 0;
+    const lpStage = l.commitments?.length > 0 ? mostAdvancedStage(l.commitments) : (l.stage || "outreach");
+    return lpStage === "closed" && totalCommit > 0;
   });
 
   return (
@@ -3806,6 +3859,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
         const commitment = lp.commitments.find(c => c.fund === fundName);
         return {
           ...lp,
+          stage: commitment?.stage || lp.stage || 'outreach',
           commitment: commitment?.commitment || 0,
           funded: commitment?.funded || 0,
           nav: commitment?.nav || 0,
