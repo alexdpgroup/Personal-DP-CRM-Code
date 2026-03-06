@@ -412,6 +412,7 @@ export default function CRM({ session, onLogout }) {
   const [lps, setLPs] = useState(null);
   const [fundDefs, setFundDefs] = useState(null);
   const [fundMOICs, setFundMOICs] = useState({});
+  const [partners, setPartners] = useState(PARTNERS);
   const [portalLP, setPortalLP] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddFund, setShowAddFund] = useState(false);
@@ -557,6 +558,21 @@ export default function CRM({ session, onLogout }) {
       console.log('🔍 Transformed funds:', transformedFunds);
       console.log('🔍 Fund names:', transformedFunds.map(f => f.name));
 
+      // Load partners from Supabase
+      let partnerNames = PARTNERS;
+      try {
+        const { data: partnersData, error: partnersError } = await supabase
+          .from('partners')
+          .select('name')
+          .order('name');
+        if (!partnersError && partnersData && partnersData.length > 0) {
+          partnerNames = partnersData.map(p => p.name);
+        }
+      } catch (err) {
+        console.warn('Could not load partners, using defaults:', err);
+      }
+
+      setPartners(partnerNames);
       setFundDefs(transformedFunds.length > 0 ? transformedFunds : FUND_DEFS);
       setLPs(lpsWithCommitments);
       setLoading(false);
@@ -752,11 +768,11 @@ export default function CRM({ session, onLogout }) {
 
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
-            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} />}
+            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} />}
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
-            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} fundMOICs={fundMOICs} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
+            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
           </div>
         </main>
 
@@ -934,7 +950,7 @@ function MiniStat({ label, value }) {
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP Directory – Portfolio-style expandable table ──
-function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs }) {
+function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterFund, setFilterFund] = useState("all");
@@ -1110,7 +1126,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs }) {
         </select>
         <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
           <option value="all">All Partners</option>
-          {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+          {(partners || PARTNERS).map(p => <option key={p} value={p}>{p}</option>)}
         </select>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
           <Icon name="plus" size={14} /> Add LP
@@ -1259,7 +1275,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs }) {
         </div>
       </div>
 
-      {showAdd && <AddLPDrawer fundDefs={fundDefs} onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, { ...newLP, commitments: [] }]); setShowAdd(false); }} />}
+      {showAdd && <AddLPDrawer fundDefs={fundDefs} partners={partners} onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, { ...newLP, commitments: [] }]); setShowAdd(false); }} />}
 
       {addCommitmentFor !== null && (
         <AddCommitmentDrawer
@@ -1284,6 +1300,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs }) {
         <LPDetailDrawer
           lp={normalizedLPs.find(l => l.id === selected.id) || selected}
           fundMOICs={fundMOICs}
+          partners={partners}
           onClose={() => setSelected(null)}
           onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
@@ -1397,7 +1414,7 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
   );
 }
 
-function LPDetailDrawer({ lp, fundMOICs, onClose, onSave, onDelete, onPortal }) {
+function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, onPortal }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(lp);
@@ -1585,7 +1602,7 @@ function LPDetailDrawer({ lp, fundMOICs, onClose, onSave, onDelete, onPortal }) 
               <div className="field"><label>Phone</label><input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
               <div className="field"><label>Partner</label>
                 <select value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })}>
-                  {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+                  {(partners || PARTNERS).map(p => <option key={p} value={p}>{p}</option>)}
                 </select>
               </div>
               <div className="field"><label>Tier</label>
@@ -1769,14 +1786,15 @@ function AddContactModal({ lpId, onClose, onSave }) {
 }
 
 // ── Add LP Drawer ─────────────────────────────────────────────────────────────
-function AddLPDrawer({ onClose, onSave, fundDefs }) {
+function AddLPDrawer({ onClose, onSave, fundDefs, partners }) {
   const funds = fundDefs || [];
+  const partnerList = partners || PARTNERS;
   const [form, setForm] = useState({
     name: "", // Primary contact name
     firm: "",
     email: "",
     phone: "",
-    partner: PARTNERS[0],
+    partner: partnerList[0] || '',
     additionalContacts: []
   });
 
@@ -1870,7 +1888,7 @@ function AddLPDrawer({ onClose, onSave, fundDefs }) {
             <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
             <div className="field"><label>Partner</label>
               <select value={form.partner} onChange={e => setForm({ ...form, partner: e.target.value })}>
-                {PARTNERS.map(p => <option key={p} value={p}>{p}</option>)}
+                {partnerList.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
           </div>
@@ -3776,7 +3794,7 @@ function InvestorPortal({ lp, onExit }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FUND PAGE ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function FundPage({ fundName, fundDefs, fundMOICs, lps, saveLPs, onPortal }) {
+function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPortal }) {
   const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
@@ -4215,6 +4233,7 @@ function FundPage({ fundName, fundDefs, fundMOICs, lps, saveLPs, onPortal }) {
         <LPDetailDrawer
           lp={selectedLP}
           fundMOICs={fundMOICs}
+          partners={partners}
           onClose={() => setSelectedLP(null)}
           onSave={(updated) => {
             saveLPs(lps.map(l => l.id === updated.id ? updated : l));
