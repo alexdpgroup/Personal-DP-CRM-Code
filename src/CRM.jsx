@@ -411,6 +411,7 @@ export default function CRM({ session, onLogout }) {
   const [activeFund, setActiveFund] = useState(null);
   const [lps, setLPs] = useState(null);
   const [fundDefs, setFundDefs] = useState(null);
+  const [fundMOICs, setFundMOICs] = useState({});
   const [portalLP, setPortalLP] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddFund, setShowAddFund] = useState(false);
@@ -454,6 +455,80 @@ export default function CRM({ session, onLogout }) {
       } catch (err) {
         console.warn('Could not load lp_commitments:', err);
       }
+
+      // Load portfolio companies and financings for fund MOIC calculation
+      let portfolioCompanies = [];
+      let portfolioFinancings = [];
+      try {
+        const [compRes, finRes] = await Promise.all([
+          supabase.from('portfolio_companies').select('*'),
+          supabase.from('financings').select('*'),
+        ]);
+        if (!compRes.error) portfolioCompanies = compRes.data || [];
+        if (!finRes.error) portfolioFinancings = finRes.data || [];
+      } catch (err) {
+        console.warn('Could not load portfolio for MOIC:', err);
+      }
+
+      // Compute per-fund blended MOIC: totalValue / totalInvested
+      const moicMap = {};
+      if (portfolioCompanies.length > 0) {
+        // Build company map with financings
+        const companyMap = portfolioCompanies.map(comp => ({
+          manualFMV: comp.manual_fmv,
+          financings: portfolioFinancings
+            .filter(f => f.company_id === comp.id)
+            .map(f => ({
+              asset: f.asset,
+              fund: f.fund || '',
+              invested: parseFloat(f.invested) || 0,
+              shares: parseInt(f.shares) || 0,
+              costPerShare: parseFloat(f.cost_per_share) || 0,
+              fmvPerShare: parseFloat(f.fmv_per_share) || 0,
+              converted: f.converted !== undefined ? f.converted : true,
+              date: f.date,
+            })),
+        }));
+
+        // Collect all fund names that have financings
+        const allFundNames = [...new Set(portfolioFinancings.map(f => f.fund).filter(Boolean))];
+
+        for (const fundName of allFundNames) {
+          let totalInvested = 0;
+          let totalValue = 0;
+          for (const comp of companyMap) {
+            const fundFinancings = comp.financings.filter(f => f.fund === fundName);
+            if (fundFinancings.length === 0) continue;
+
+            // Synced FMV: manual override > most recent financing date > last entered
+            let syncedFMV = 0;
+            if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
+              syncedFMV = comp.manualFMV;
+            } else if (comp.financings.length > 0) {
+              const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
+              syncedFMV = sortedByDate[0]?.costPerShare || 0;
+            }
+
+            for (const f of fundFinancings) {
+              const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+              if (!isUnconvertedWarrant) totalInvested += f.invested;
+
+              const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+              if (isUnconverted) {
+                totalValue += f.invested;
+              } else if (!isUnconvertedWarrant) {
+                const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+                const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+                totalValue += shares * fmv;
+              }
+            }
+          }
+          if (totalInvested > 0) {
+            moicMap[fundName] = totalValue / totalInvested;
+          }
+        }
+      }
+      setFundMOICs(moicMap);
 
       // Attach commitments to their LPs
       const lpsWithCommitments = (lpsData || []).map(lp => {
@@ -676,12 +751,12 @@ export default function CRM({ session, onLogout }) {
           </header>
 
           <div className="content fade-in" key={page + activeFund}>
-            {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} onFund={goFund} />}
-            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} />}
+            {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
+            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} />}
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
-            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
+            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} fundMOICs={fundMOICs} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
           </div>
         </main>
 
@@ -694,7 +769,7 @@ export default function CRM({ session, onLogout }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── DASHBOARD PAGE ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function DashboardPage({ lps, fundDefs, onFund }) {
+function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
   const safeLps = lps || [];
   const getLPStage = (l) => l.commitments?.length > 0 ? mostAdvancedStage(l.commitments) : (l.stage || "outreach");
   const closed = safeLps.filter(l => getLPStage(l) === "closed");
@@ -708,8 +783,8 @@ function DashboardPage({ lps, fundDefs, onFund }) {
     return s + (l.funded || 0);
   }, 0);
   const totalNAV = safeLps.reduce((s, l) => {
-    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
-    return s + (l.nav || 0);
+    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0);
+    return s + ((l.funded || 0) * (fundMOICs[l.fund] || 1));
   }, 0);
   const pipelineCount = safeLps.filter(l => getLPStage(l) !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
@@ -859,7 +934,7 @@ function MiniStat({ label, value }) {
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP Directory – Portfolio-style expandable table ──
-function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
+function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterFund, setFilterFund] = useState("all");
@@ -897,7 +972,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
   // Totals
   const totalCommitment = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
   const totalFunded = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.funded || 0), 0), 0);
-  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.nav || 0), 0), 0);
+  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0), 0);
 
   const saveLPAtIndex = (lpIdx, updatedLP) => {
     const updated = lps.map(l => l.id === updatedLP.id ? updatedLP : l);
@@ -1078,7 +1153,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                   const s = stageInfo(derivedStage);
                   const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
                   const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
-                  const lpNAV = commitments.reduce((ss, c) => ss + (c.nav || 0), 0);
+                  const lpNAV = commitments.reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0);
                   const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                   const fundDisplay = fundsInvested.length === 1
                     ? fundsInvested[0].replace("Decisive Point ", "")
@@ -1158,9 +1233,11 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                         <td></td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: (commit.nav || 0) > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
-                          {commit.nav ? fmtMoney(commit.nav) : "—"}
+                        {(() => { const calcNAV = (commit.funded || 0) * (fundMOICs[commit.fund] || 1); return (
+                        <td style={{ textAlign: "right", fontSize: 12, color: calcNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
+                          {calcNAV ? fmtMoney(calcNAV) : "—"}
                         </td>
+                        ); })()}
                         <td>
                           <div style={{ display: 'flex', gap: 4 }}>
                             <button className="btn btn-ghost btn-sm" onClick={() => setEditCommitment({ lpIdx: realIdx, commitIdx })} title="Edit commitment">
@@ -1206,6 +1283,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
       {selected && (
         <LPDetailDrawer
           lp={normalizedLPs.find(l => l.id === selected.id) || selected}
+          fundMOICs={fundMOICs}
           onClose={() => setSelected(null)}
           onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
@@ -1218,7 +1296,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
 
 // ── Add Commitment Drawer ──
 function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
-  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, nav: 0, stage: 'outreach' });
+  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, stage: 'outreach' });
 
   const handleSave = () => {
     if (!form.fund) { alert('Please select a fund'); return; }
@@ -1249,9 +1327,6 @@ function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
             <div className="field"><label>Funded ($)</label>
               <input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} placeholder="0" />
             </div>
-            <div className="field"><label>NAV ($)</label>
-              <input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} placeholder="0" />
-            </div>
             <div className="field span2"><label>Stage</label>
               <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
                 {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -1274,7 +1349,6 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
     fund: commitment?.fund || '',
     commitment: commitment?.commitment || 0,
     funded: commitment?.funded || 0,
-    nav: commitment?.nav || 0,
     stage: commitment?.stage || 'outreach',
   });
 
@@ -1307,9 +1381,6 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
             <div className="field"><label>Funded ($)</label>
               <input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} />
             </div>
-            <div className="field"><label>NAV ($)</label>
-              <input type="number" value={form.nav} onChange={e => setForm({ ...form, nav: +e.target.value })} />
-            </div>
             <div className="field span2"><label>Stage</label>
               <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
                 {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -1326,7 +1397,7 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
   );
 }
 
-function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
+function LPDetailDrawer({ lp, fundMOICs, onClose, onSave, onDelete, onPortal }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(lp);
@@ -1339,7 +1410,8 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
   const s = stageInfo(derivedStage);
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0);
-  const totalNAV = commitments.reduce((s, c) => s + (c.nav || 0), 0);
+  const moics = fundMOICs || {};
+  const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
 
   useEffect(() => {
     if (tab === "contacts") {
@@ -1470,7 +1542,9 @@ function LPDetailDrawer({ lp, onClose, onSave, onDelete, onPortal }) {
                           <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
                             <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
                             <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
-                            <span title="NAV" style={{ color: (c.nav || 0) > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{c.nav ? fmtMoney(c.nav) : "—"}</span>
+                            {(() => { const cNAV = (c.funded || 0) * (moics[c.fund] || 1); return (
+                            <span title="NAV" style={{ color: cNAV > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{cNAV ? fmtMoney(cNAV) : "—"}</span>
+                            ); })()}
                           </div>
                         </div>
                         <div className="pipeline-bar" style={{ gap: 4 }}>
@@ -3702,7 +3776,7 @@ function InvestorPortal({ lp, onExit }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FUND PAGE ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
+function FundPage({ fundName, fundDefs, fundMOICs, lps, saveLPs, onPortal }) {
   const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
@@ -3860,7 +3934,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
           stage: commitment?.stage || lp.stage || 'outreach',
           commitment: commitment?.commitment || 0,
           funded: commitment?.funded || 0,
-          nav: commitment?.nav || 0,
+          nav: (commitment?.funded || 0) * (fundMOICs[fundName] || 1),
           contact: lp,
         };
       });
@@ -4140,6 +4214,7 @@ function FundPage({ fundName, fundDefs, lps, saveLPs, onPortal }) {
       {selectedLP && (
         <LPDetailDrawer
           lp={selectedLP}
+          fundMOICs={fundMOICs}
           onClose={() => setSelectedLP(null)}
           onSave={(updated) => {
             saveLPs(lps.map(l => l.id === updated.id ? updated : l));
