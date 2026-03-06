@@ -1120,9 +1120,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs }) {
                           {fundDisplay}
                         </span>
                       </td>
-                      <td>
-                        <span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
-                      </td>
+                      <td></td>
                       <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
                       <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
                       <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
