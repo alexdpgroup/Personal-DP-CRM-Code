@@ -628,7 +628,7 @@ export default function CRM({ session, onLogout }) {
   if (portalLP) return (
     <>
       <style>{CSS}</style>
-      <InvestorPortal lp={portalLP} onExit={() => setPortalLP(null)} />
+      <InvestorPortal lp={portalLP} fundMOICs={fundMOICs} onExit={() => setPortalLP(null)} />
     </>
   );
 
@@ -3667,12 +3667,13 @@ function PortalPickerPage({ lps, onSelect }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── INVESTOR PORTAL (LP-facing) ───────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function InvestorPortal({ lp, onExit }) {
+function InvestorPortal({ lp, fundMOICs, onExit }) {
+  const moics = fundMOICs || {};
   const commitments = lp.commitments || [];
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0) || lp.funded || 0;
   const totalCalled = commitments.reduce((s, c) => s + (c.called || 0), 0) || lp.called || 0;
-  const totalNAV = commitments.reduce((s, c) => s + (c.nav || 0), 0) || lp.nav || 0;
+  const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
   const totalReturn = totalNAV - totalFunded;
   const returnPct = totalFunded > 0 ? ((totalNAV / totalFunded - 1) * 100).toFixed(1) : 0;
   const totalDistributions = (lp.distributions || []).reduce((s, d) => s + d.amount, 0);
