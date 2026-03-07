@@ -1294,6 +1294,10 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
           partners={partners}
           onClose={() => setSelected(null)}
           onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
+          onUpdateCommitment={(commitIdx, updated) => {
+            const realIdx = lps.findIndex(l => l.id === selected.id);
+            if (realIdx !== -1) updateCommitment(realIdx, commitIdx, updated);
+          }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
           onPortal={() => { onPortal(selected); setSelected(null); }}
         />
@@ -1412,7 +1416,7 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
   );
 }
 
-function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, onPortal }) {
+function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateCommitment, onDelete, onPortal }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(lp);
@@ -1566,9 +1570,9 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
                                 padding: "4px 6px",
                               }}
                               onClick={() => {
-                                const updatedCommitments = [...commitments];
-                                updatedCommitments[i] = { ...c, stage: st.id };
-                                onSave({ ...lp, commitments: updatedCommitments });
+                                if (onUpdateCommitment) {
+                                  onUpdateCommitment(i, { stage: st.id });
+                                }
                               }}
                             >
                               {st.label}
