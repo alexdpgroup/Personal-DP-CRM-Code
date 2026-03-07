@@ -3957,17 +3957,6 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
     return [...investments, ...commitmentBasedLPs];
   }, [lps, fundName, investments]);
 
-  if (loading) {
-    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
-  }
-
-  const closedInvestments = allInvestments.filter(inv => inv.stage === "closed");
-  const pipelineInvestments = allInvestments.filter(inv => inv.stage !== "closed");
-  const committed = allInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
-  const closedCommitted = closedInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
-  const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
-  const nav = allInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
-
   // Compute portfolio value from portfolio companies (same logic as FundPortfolioTab)
   const portfolioValue = useMemo(() => {
     const fundComps = portfolio
@@ -4000,6 +3989,17 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
       }, 0);
     }, 0);
   }, [portfolio, fundName]);
+
+  if (loading) {
+    return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
+  }
+
+  const closedInvestments = allInvestments.filter(inv => inv.stage === "closed");
+  const pipelineInvestments = allInvestments.filter(inv => inv.stage !== "closed");
+  const committed = allInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const closedCommitted = closedInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
+  const nav = allInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
 
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const closedPct = fd.target > 0 ? (closedCommitted / fd.target) * 100 : 0;
