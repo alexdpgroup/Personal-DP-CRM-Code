@@ -1094,9 +1094,22 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
     }
   };
 
-  const deleteLP = (lpIdx) => {
+  const deleteLP = async (lpIdx) => {
     if (!confirm('Delete this LP and all their commitments?')) return;
-    saveLPs(lps.filter((_, i) => i !== lpIdx));
+    const lp = lps[lpIdx];
+    if (lp && lp.id) {
+      try {
+        // Delete commitments first, then the LP
+        await supabase.from('lp_commitments').delete().eq('lp_id', lp.id);
+        const { error } = await supabase.from('lps').delete().eq('id', lp.id);
+        if (error) throw error;
+      } catch (err) {
+        console.error('Error deleting LP:', err);
+        alert('Error deleting LP: ' + err.message);
+        return;
+      }
+    }
+    setLPs(lps.filter((_, i) => i !== lpIdx));
   };
 
   return (
