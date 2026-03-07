@@ -1493,7 +1493,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", padding: "0 26px" }}>
-          {["overview", "contacts", "docs"].map(t => (
+          {["overview", "contacts"].map(t => (
             <div
               key={t}
               onClick={() => setTab(t)}
@@ -1650,20 +1650,6 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
             </div>
           )}
 
-          {tab === "docs" && (
-            <div>
-              {(lp.docs || []).length === 0 && <div className="text-muted">No documents on file.</div>}
-              {(lp.docs || []).map((d, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "11px 0", borderBottom: "1px solid var(--border)" }}>
-                  <div className="flex-row">
-                    <Icon name="note" size={15} />
-                    <span style={{ fontSize: 13.5 }}>{d}</span>
-                  </div>
-                  <button className="btn btn-ghost btn-sm"><Icon name="download" size={13} /></button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="drawer-footer">
