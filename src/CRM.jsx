@@ -3634,7 +3634,13 @@ function PortalPickerPage({ lps, onSelect }) {
               <tr><th>Investor</th><th>Fund</th><th>Commitment</th><th>NAV</th><th></th></tr>
             </thead>
             <tbody>
-              {eligible.map(lp => (
+              {eligible.map(lp => {
+                const commitments = lp.commitments || [];
+                const totalCommit = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
+                const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0) || lp.funded || 0;
+                const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
+                const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? `${funds.length} funds` : lp.fund || "—";
+                return (
                 <tr key={lp.id} onClick={() => onSelect(lp)}>
                   <td>
                     <div className="flex-row">
@@ -3642,12 +3648,13 @@ function PortalPickerPage({ lps, onSelect }) {
                       <div><div className="td-name">{lp.name}</div><div className="td-sub">{lp.firm}</div></div>
                     </div>
                   </td>
-                  <td><span className="tag">{lp.fund}</span></td>
-                  <td>{fmtMoney(lp.commitment)}</td>
-                  <td style={{ color: "var(--green)", fontWeight: 500 }}>{fmtMoney(lp.nav)}</td>
+                  <td><span className="tag">{fundDisplay}</span></td>
+                  <td>{fmtMoney(totalCommit)}</td>
+                  <td style={{ color: "var(--green)", fontWeight: 500 }}>{fmtMoney(totalFunded)}</td>
                   <td><button className="btn btn-outline btn-sm"><Icon name="portal" size={13} /> View Portal</button></td>
                 </tr>
-              ))}
+                );
+              })}
               {eligible.length === 0 && <tr><td colSpan={5}><div className="empty">No closed LPs yet.</div></td></tr>}
             </tbody>
           </table>
@@ -3661,10 +3668,17 @@ function PortalPickerPage({ lps, onSelect }) {
 // ── INVESTOR PORTAL (LP-facing) ───────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function InvestorPortal({ lp, onExit }) {
-  const totalReturn = lp.nav - lp.funded;
-  const returnPct = lp.funded > 0 ? ((lp.nav / lp.funded - 1) * 100).toFixed(1) : 0;
+  const commitments = lp.commitments || [];
+  const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
+  const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0) || lp.funded || 0;
+  const totalCalled = commitments.reduce((s, c) => s + (c.called || 0), 0) || lp.called || 0;
+  const totalNAV = commitments.reduce((s, c) => s + (c.nav || 0), 0) || lp.nav || 0;
+  const totalReturn = totalNAV - totalFunded;
+  const returnPct = totalFunded > 0 ? ((totalNAV / totalFunded - 1) * 100).toFixed(1) : 0;
   const totalDistributions = (lp.distributions || []).reduce((s, d) => s + d.amount, 0);
-  const fundPortfolio = PORTFOLIO.filter(p => p.fund === lp.fund);
+  const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
+  const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? funds.join(", ") : lp.fund || "—";
+  const fundPortfolio = PORTFOLIO.filter(p => funds.includes(p.fund));
 
   return (
     <>
@@ -3684,28 +3698,28 @@ function InvestorPortal({ lp, onExit }) {
       <div className="portal-content fade-in">
         <div className="portal-welcome">
           <h2>Welcome back, {lp.name.split(" ")[0]}</h2>
-          <p>Your investor summary as of {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · {lp.fund}</p>
+          <p>Your investor summary as of {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · {fundDisplay}</p>
         </div>
 
         {/* Big summary */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 18, marginBottom: 24 }}>
           <div className="portal-card" style={{ borderTop: "3px solid var(--gold)" }}>
             <h3>Committed Capital</h3>
-            <div className="portal-big-num">{fmtMoney(lp.commitment)}</div>
-            <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>Funded: {fmtMoney(lp.funded)}</div>
+            <div className="portal-big-num">{fmtMoney(totalCommitment)}</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>Funded: {fmtMoney(totalFunded)}</div>
             <div className="progress-track mt-2">
-              <div className="progress-fill" style={{ width: lp.commitment > 0 ? `${(lp.funded / lp.commitment) * 100}%` : "0%" }} />
+              <div className="progress-fill" style={{ width: totalCommitment > 0 ? `${(totalFunded / totalCommitment) * 100}%` : "0%" }} />
             </div>
             <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 5 }}>
-              {lp.commitment > 0 ? Math.round((lp.funded / lp.commitment) * 100) : 0}% funded
+              {totalCommitment > 0 ? Math.round((totalFunded / totalCommitment) * 100) : 0}% funded
             </div>
           </div>
 
           <div className="portal-card" style={{ borderTop: "3px solid var(--green)" }}>
             <h3>Current NAV</h3>
-            <div className="portal-big-num" style={{ color: "var(--green)" }}>{fmtMoney(lp.nav)}</div>
-            <div style={{ fontSize: 13, color: lp.nav >= lp.funded ? "var(--green)" : "var(--red)" }}>
-              {lp.nav >= lp.funded ? "▲" : "▼"} {fmtMoney(Math.abs(totalReturn))} ({returnPct}%)
+            <div className="portal-big-num" style={{ color: "var(--green)" }}>{fmtMoney(totalNAV)}</div>
+            <div style={{ fontSize: 13, color: totalNAV >= totalFunded ? "var(--green)" : "var(--red)" }}>
+              {totalNAV >= totalFunded ? "▲" : "▼"} {fmtMoney(Math.abs(totalReturn))} ({returnPct}%)
             </div>
           </div>
 
@@ -3720,12 +3734,12 @@ function InvestorPortal({ lp, onExit }) {
           {/* Account Details */}
           <div className="portal-card">
             <h3>Account Details</h3>
-            <div className="portal-row"><span className="lbl">Fund</span><span className="val">{lp.fund}</span></div>
-            <div className="portal-row"><span className="lbl">Investor Type</span><span className="val">{lp.tier}</span></div>
+            <div className="portal-row"><span className="lbl">Fund</span><span className="val">{fundDisplay}</span></div>
+            <div className="portal-row"><span className="lbl">Investor Type</span><span className="val">{lp.tier || "—"}</span></div>
             <div className="portal-row"><span className="lbl">Relationship Manager</span><span className="val">{lp.partner}</span></div>
-            <div className="portal-row"><span className="lbl">Commitment</span><span className="val">{fmtMoney(lp.commitment)}</span></div>
-            <div className="portal-row"><span className="lbl">Capital Called</span><span className="val">{fmtMoney(lp.funded)}</span></div>
-            <div className="portal-row"><span className="lbl">Uncalled Capital</span><span className="val">{fmtMoney(lp.commitment - lp.funded)}</span></div>
+            <div className="portal-row"><span className="lbl">Commitment</span><span className="val">{fmtMoney(totalCommitment)}</span></div>
+            <div className="portal-row"><span className="lbl">Capital Called</span><span className="val">{fmtMoney(totalFunded)}</span></div>
+            <div className="portal-row"><span className="lbl">Uncalled Capital</span><span className="val">{fmtMoney(totalCommitment - totalFunded)}</span></div>
           </div>
 
           {/* Distributions */}
@@ -3747,7 +3761,7 @@ function InvestorPortal({ lp, onExit }) {
         {/* Portfolio Companies */}
         {fundPortfolio.length > 0 && (
           <div className="portal-card mt-4">
-            <h3>Fund Portfolio — {lp.fund}</h3>
+            <h3>Fund Portfolio — {fundDisplay}</h3>
             <table>
               <thead>
                 <tr>
