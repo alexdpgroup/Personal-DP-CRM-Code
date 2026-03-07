@@ -1144,7 +1144,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
               <thead>
                 <tr>
                   <th style={{ width: 220 }}>Investor</th>
-                  <th>Contact</th>
+                  <th>Tier</th>
                   <th>Fund</th>
                   <th>Stage</th>
                   <th>Partner</th>
@@ -1197,8 +1197,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontSize: 13 }}>{lp.name}</div>
-                        <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{lp.email || "—"}</div>
+                        <span style={{ fontSize: 13 }}>{lp.tier || "—"}</span>
                       </td>
                       <td>
                         <span className="tag" style={{ fontSize: 11 }} title={fundsInvested.length > 1 ? fundsInvested.join(', ') : ''}>
