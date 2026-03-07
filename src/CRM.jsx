@@ -3967,6 +3967,40 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
   const closedCommitted = closedInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
   const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
   const nav = allInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
+
+  // Compute portfolio value from portfolio companies (same logic as FundPortfolioTab)
+  const portfolioValue = useMemo(() => {
+    const fundComps = portfolio
+      .map(comp => ({
+        ...comp,
+        allFinancings: comp.financings,
+        financings: comp.financings.filter(f => f.fund === fundName)
+      }))
+      .filter(comp => comp.financings.length > 0);
+
+    const getCompanySyncedFMV = (comp) => {
+      if (comp.manualFMV !== undefined && comp.manualFMV !== null) return comp.manualFMV;
+      if (comp.allFinancings.length > 0) {
+        const sorted = [...comp.allFinancings].sort((a, b) => new Date(b.date) - new Date(a.date));
+        return sorted[0]?.costPerShare || 0;
+      }
+      return 0;
+    };
+
+    return fundComps.reduce((total, comp) => {
+      const syncedFMV = getCompanySyncedFMV(comp);
+      return total + comp.financings.reduce((s, f) => {
+        const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+        if (isUnconverted) return s + f.invested;
+        const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+        if (isUnconvertedWarrant) return s;
+        const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+        const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+        return s + (shares * fmv);
+      }, 0);
+    }, 0);
+  }, [portfolio, fundName]);
+
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const closedPct = fd.target > 0 ? (closedCommitted / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
@@ -4079,7 +4113,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
             { label: "Funded",       val: fmtMoney(funded, true) },
             { label: "Closed LPs",   val: closedInvestments.length },
             { label: "In Pipeline",  val: pipelineInvestments.length },
-            { label: nav > 0 ? "Portfolio NAV" : "Remaining", val: nav > 0 ? fmtMoney(nav, true) : fmtMoney(Math.max(fd.target - committed, 0), true) },
+            { label: portfolioValue > 0 ? "Portfolio Value" : "Remaining", val: portfolioValue > 0 ? fmtMoney(portfolioValue, true) : fmtMoney(Math.max(fd.target - committed, 0), true) },
           ].map(item => (
             <div key={item.label} style={{ background: "var(--surface)", borderRadius: 8, padding: "12px 14px" }}>
               <div style={{ fontSize: 11, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{item.label}</div>
