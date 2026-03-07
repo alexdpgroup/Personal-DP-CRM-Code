@@ -998,6 +998,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
           funded: commitment.funded || 0,
           called: commitment.called || 0,
           nav: commitment.nav || 0,
+          stage: commitment.stage || 'outreach',
         })
         .select()
         .single();
@@ -1034,8 +1035,9 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
       funded: updated.funded !== undefined ? updated.funded : existingCommitment.funded,
       called: updated.called !== undefined ? updated.called : existingCommitment.called,
       nav: updated.nav !== undefined ? updated.nav : existingCommitment.nav,
+      stage: mergedStage,
     };
-    const merged = { ...mergedDb, stage: mergedStage };
+    const merged = mergedDb;
 
     try {
       let newId = existingCommitment.id;
