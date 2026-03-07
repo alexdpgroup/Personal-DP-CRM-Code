@@ -540,6 +540,7 @@ export default function CRM({ session, onLogout }) {
             fund: c.fund || '',
             commitment: parseFloat(c.commitment) || 0,
             funded: parseFloat(c.funded) || 0,
+            called: parseFloat(c.called) || 0,
             nav: parseFloat(c.nav) || 0,
             stage: c.stage || lp.stage || 'outreach',
           }));
@@ -955,7 +956,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
     if (lp.commitments && lp.commitments.length > 0) return lp;
     // Migrate old flat fields
     if (lp.fund && lp.commitment) {
-      return { ...lp, commitments: [{ id: 'legacy-' + lp.id, fund: lp.fund, commitment: lp.commitment || 0, funded: lp.funded || 0, nav: lp.nav || 0 }] };
+      return { ...lp, commitments: [{ id: 'legacy-' + lp.id, fund: lp.fund, commitment: lp.commitment || 0, funded: lp.funded || 0, called: lp.called || 0, nav: lp.nav || 0 }] };
     }
     return { ...lp, commitments: lp.commitments || [] };
   });
@@ -994,6 +995,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
           fund: commitment.fund || '',
           commitment: commitment.commitment || 0,
           funded: commitment.funded || 0,
+          called: commitment.called || 0,
           nav: commitment.nav || 0,
         })
         .select()
@@ -1006,6 +1008,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
         fund: newRow.fund || '',
         commitment: parseFloat(newRow.commitment) || 0,
         funded: parseFloat(newRow.funded) || 0,
+        called: parseFloat(newRow.called) || 0,
         nav: parseFloat(newRow.nav) || 0,
         stage: newRow.stage || lp.stage || 'outreach',
       };
@@ -1028,6 +1031,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
       fund: updated.fund !== undefined ? updated.fund : existingCommitment.fund,
       commitment: updated.commitment !== undefined ? updated.commitment : existingCommitment.commitment,
       funded: updated.funded !== undefined ? updated.funded : existingCommitment.funded,
+      called: updated.called !== undefined ? updated.called : existingCommitment.called,
       nav: updated.nav !== undefined ? updated.nav : existingCommitment.nav,
     };
     const merged = { ...mergedDb, stage: mergedStage };
@@ -1145,6 +1149,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                   <th>Partner</th>
                   <th style={{ textAlign: "right" }}>Commitment</th>
                   <th style={{ textAlign: "right" }}>Funded</th>
+                  <th style={{ textAlign: "right" }}>Called</th>
                   <th style={{ textAlign: "right" }}>NAV</th>
                   <th></th>
                 </tr>
@@ -1156,6 +1161,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                   const s = stageInfo(derivedStage);
                   const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
                   const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
+                  const lpCalled = commitments.reduce((ss, c) => ss + (c.called || 0), 0);
                   const lpNAV = commitments.reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0);
                   const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                   const fundDisplay = fundsInvested.length === 1
@@ -1202,6 +1208,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                       <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
                       <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
                       <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
+                      <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCalled ? fmtMoney(lpCalled) : "—"}</td>
                       <td style={{ textAlign: "right", fontWeight: 600, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
                       <td onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'flex', gap: 4 }}>
@@ -1236,6 +1243,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                         <td></td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
+                        <td style={{ textAlign: "right", fontSize: 12 }}>{commit.called ? fmtMoney(commit.called) : "—"}</td>
                         {(() => { const calcNAV = (commit.funded || 0) * (fundMOICs[commit.fund] || 1); return (
                         <td style={{ textAlign: "right", fontSize: 12, color: calcNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
                           {calcNAV ? fmtMoney(calcNAV) : "—"}
@@ -1300,7 +1308,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
 
 // ── Add Commitment Drawer ──
 function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
-  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, stage: 'outreach' });
+  const [form, setForm] = useState({ fund: '', commitment: 0, funded: 0, called: 0, stage: 'outreach' });
 
   const handleSave = () => {
     if (!form.fund) { alert('Please select a fund'); return; }
@@ -1331,6 +1339,9 @@ function AddCommitmentDrawer({ lpName, fundNames, onClose, onSave }) {
             <div className="field"><label>Funded ($)</label>
               <input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} placeholder="0" />
             </div>
+            <div className="field"><label>Called ($)</label>
+              <input type="number" value={form.called} onChange={e => setForm({ ...form, called: +e.target.value })} placeholder="0" />
+            </div>
             <div className="field span2"><label>Stage</label>
               <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
                 {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -1353,6 +1364,7 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
     fund: commitment?.fund || '',
     commitment: commitment?.commitment || 0,
     funded: commitment?.funded || 0,
+    called: commitment?.called || 0,
     stage: commitment?.stage || 'outreach',
   });
 
@@ -1384,6 +1396,9 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
             </div>
             <div className="field"><label>Funded ($)</label>
               <input type="number" value={form.funded} onChange={e => setForm({ ...form, funded: +e.target.value })} />
+            </div>
+            <div className="field"><label>Called ($)</label>
+              <input type="number" value={form.called} onChange={e => setForm({ ...form, called: +e.target.value })} />
             </div>
             <div className="field span2"><label>Stage</label>
               <select value={form.stage} onChange={e => setForm({ ...form, stage: e.target.value })}>
