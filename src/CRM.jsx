@@ -601,6 +601,7 @@ export default function CRM({ session, onLogout }) {
           if (lp.stage) updateFields.stage = lp.stage;
           if (lp.partner !== undefined) updateFields.partner = lp.partner || '';
           if (lp.tier !== undefined) updateFields.tier = lp.tier || '';
+          if (lp.notes !== undefined) updateFields.notes = lp.notes || [];
 
           const { error } = await supabase
             .from('lps')
