@@ -544,7 +544,8 @@ export default function CRM({ session, onLogout }) {
             nav: parseFloat(c.nav) || 0,
             stage: c.stage || lp.stage || 'outreach',
           }));
-        return { ...lp, commitments: lpCommitments };
+        const notes = typeof lp.notes === 'string' ? JSON.parse(lp.notes || '[]') : (lp.notes || []);
+        return { ...lp, commitments: lpCommitments, notes };
       });
 
       // Transform funds to match expected format
@@ -601,7 +602,7 @@ export default function CRM({ session, onLogout }) {
           if (lp.stage) updateFields.stage = lp.stage;
           if (lp.partner !== undefined) updateFields.partner = lp.partner || '';
           if (lp.tier !== undefined) updateFields.tier = lp.tier || '';
-          if (lp.notes !== undefined) updateFields.notes = lp.notes || [];
+          if (lp.notes !== undefined) updateFields.notes = JSON.stringify(lp.notes || []);
 
           const { error } = await supabase
             .from('lps')
@@ -1486,26 +1487,10 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
     }
   };
 
-  const addNote = async () => {
+  const addNote = () => {
     if (!newNote.trim()) return;
     const note = { date: new Date().toISOString().split("T")[0], author: "You", text: newNote };
-    const updatedNotes = [...(lp.notes || []), note];
-    if (lp.id) {
-      try {
-        const { error } = await supabase
-          .from('lps')
-          .update({ notes: updatedNotes })
-          .eq('id', lp.id);
-        if (error) {
-          alert('Error saving note: ' + error.message);
-          return;
-        }
-      } catch (err) {
-        alert('Error saving note: ' + err.message);
-        return;
-      }
-    }
-    const updated = { ...lp, notes: updatedNotes };
+    const updated = { ...lp, notes: [...(lp.notes || []), note] };
     onSave(updated);
     setNewNote("");
   };
