@@ -601,7 +601,6 @@ export default function CRM({ session, onLogout }) {
           if (lp.stage) updateFields.stage = lp.stage;
           if (lp.partner !== undefined) updateFields.partner = lp.partner || '';
           if (lp.tier !== undefined) updateFields.tier = lp.tier || '';
-          if (lp.notes !== undefined) updateFields.notes = lp.notes || [];
 
           const { error } = await supabase
             .from('lps')
@@ -809,26 +808,7 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
           <span className="card-title">Recent Activity</span>
         </div>
         <div className="card-body">
-          {safeLps.filter(l => l.notes?.length > 0).slice(0, 6).map(lp => {
-            const last = lp.notes[lp.notes.length - 1];
-            const s = stageInfo(getLPStage(lp));
-            return (
-              <div key={lp.id} style={{ display: "flex", gap: 12, padding: "12px 18px", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
-                <div className="avatar">{initials(lp.name)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <span style={{ fontWeight: 500, fontSize: 13.5 }}>{lp.name}</span>
-                      <span style={{ fontSize: 12, color: "var(--ink-muted)", marginLeft: 8 }}>{lp.fund.replace("Decisive Point ", "")}</span>
-                    </div>
-                    <span className="stat-badge" style={{ background: s.bg, color: s.color }}>{s.label}</span>
-                  </div>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-muted)", marginTop: 3 }}>{last.text.slice(0, 100)}{last.text.length > 100 ? "…" : ""}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 4 }}>{last.date} · {last.author}</div>
-                </div>
-              </div>
-            );
-          })}
+          <div className="text-muted" style={{ padding: "18px", textAlign: "center" }}>No recent activity.</div>
         </div>
       </div>
 
@@ -1436,7 +1416,6 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(lp);
-  const [newNote, setNewNote] = useState("");
   const [additionalContacts, setAdditionalContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
   // Compute totals from commitments
@@ -1486,30 +1465,6 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
     }
   };
 
-  const addNote = async () => {
-    if (!newNote.trim()) return;
-    const note = { date: new Date().toISOString().split("T")[0], author: "You", text: newNote };
-    const updatedNotes = [...(lp.notes || []), note];
-    if (lp.id) {
-      try {
-        const { error } = await supabase
-          .from('lps')
-          .update({ notes: updatedNotes })
-          .eq('id', lp.id);
-        if (error) {
-          alert('Error saving note: ' + error.message);
-          return;
-        }
-      } catch (err) {
-        alert('Error saving note: ' + err.message);
-        return;
-      }
-    }
-    const updated = { ...lp, notes: updatedNotes };
-    onSave(updated);
-    setNewNote("");
-  };
-
   const handleSave = () => {
     onSave(form);
     setEditing(false);
@@ -1538,7 +1493,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
 
         {/* Tabs */}
         <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--border)", padding: "0 26px" }}>
-          {["overview", "contacts", "notes", "docs"].map(t => (
+          {["overview", "contacts", "docs"].map(t => (
             <div
               key={t}
               onClick={() => setTab(t)}
@@ -1692,30 +1647,6 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
                   ))}
                 </div>
               )}
-            </div>
-          )}
-
-          {tab === "notes" && (
-            <div>
-              <div className="notes-list">
-                {(lp.notes || []).length === 0 && <div className="text-muted">No notes yet. Add one below.</div>}
-                {(lp.notes || []).map((n, i) => (
-                  <div key={i} className="note-item">
-                    <div className="note-meta">{n.date} · {n.author}</div>
-                    <div className="note-text">{n.text}</div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-4">
-                <textarea
-                  className="field"
-                  style={{ width: "100%", padding: "9px 12px", border: "1px solid var(--border)", borderRadius: 7, fontFamily: "var(--sans)", fontSize: 13.5, minHeight: 80, resize: "vertical", outline: "none" }}
-                  placeholder="Add a note…"
-                  value={newNote}
-                  onChange={e => setNewNote(e.target.value)}
-                />
-                <button className="btn btn-primary btn-sm mt-2" onClick={addNote}>Save Note</button>
-              </div>
             </div>
           )}
 
