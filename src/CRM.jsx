@@ -415,7 +415,7 @@ export default function CRM({ session, onLogout }) {
   const [partners, setPartners] = useState(PARTNERS);
   const [portalLP, setPortalLP] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [showAddFund, setShowAddFund] = useState(false);
+  const [showAddFund, setShowAddFund] = useState(null); // null, "fund", or "spv"
   
   useEffect(() => {
     loadFromSupabase();
@@ -698,6 +698,14 @@ export default function CRM({ session, onLogout }) {
                     ))}
                   </>
                 )}
+                <div
+                  className="sidebar-link"
+                  style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4, borderLeft: "none" }}
+                  onClick={() => setShowAddFund("fund")}
+                >
+                  <Icon name="plus" size={13} />
+                  Add Fund
+                </div>
                 
                 {spvs.length > 0 && (
                   <>
@@ -726,10 +734,10 @@ export default function CRM({ session, onLogout }) {
           <div
             className="sidebar-link"
             style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 8, borderLeft: "none" }}
-            onClick={() => setShowAddFund(true)}
+            onClick={() => setShowAddFund("spv")}
           >
             <Icon name="plus" size={13} />
-            Add Fund
+            Add SPV
           </div>
         </nav>
 
@@ -765,7 +773,7 @@ export default function CRM({ session, onLogout }) {
           </div>
         </main>
 
-        {showAddFund && <AddFundModal onClose={() => setShowAddFund(false)} />}
+        {showAddFund && <AddFundModal type={showAddFund} onClose={() => setShowAddFund(null)} />}
       </div>
     </>
   );
@@ -3183,7 +3191,11 @@ function EditFinancingModal({ company, financing, fundNames, onClose, onSave }) 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── ADD FUND MODAL ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function AddFundModal({ onClose }) {
+function AddFundModal({ type = "fund", onClose }) {
+  const isSPV = type === "spv";
+  const prefix = isSPV ? "Decisive Point - " : "Decisive Point Fund ";
+  const label = isSPV ? "SPV" : "Fund";
+
   const [form, setForm] = useState({
     name: "",
     vintage: new Date().getFullYear(),
@@ -3193,13 +3205,13 @@ function AddFundModal({ onClose }) {
 
   const handleSave = async () => {
     if (!form.name.trim() || form.target <= 0) {
-      alert("Please enter a fund name and target amount");
+      alert(`Please enter a ${label.toLowerCase()} name and target amount`);
       return;
     }
 
-    const fullName = form.name.includes("Decisive Point") 
-      ? form.name 
-      : `Decisive Point ${form.name}`;
+    const fullName = form.name.includes("Decisive Point")
+      ? form.name
+      : `${prefix}${form.name}`;
 
     const newFund = {
       name: fullName,
@@ -3209,20 +3221,18 @@ function AddFundModal({ onClose }) {
     };
 
     try {
-      // Save to Supabase instead of browser storage
       const { data, error } = await window.supabase
         .from('funds')
         .insert([newFund])
         .select();
-      
+
       if (error) throw error;
-      
-      // Show success and reload to update sidebar
-      alert(`✓ Fund "${fullName}" created successfully!`);
+
+      alert(`✓ ${label} "${fullName}" created successfully!`);
       window.location.reload();
     } catch (err) {
-      console.error("Error saving fund:", err);
-      alert(`Error creating fund: ${err.message}`);
+      console.error(`Error saving ${label.toLowerCase()}:`, err);
+      alert(`Error creating ${label.toLowerCase()}: ${err.message}`);
     }
   };
 
@@ -3232,20 +3242,20 @@ function AddFundModal({ onClose }) {
     <div className="overlay" onClick={onClose}>
       <div className="drawer" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
         <div className="drawer-header">
-          <div className="drawer-title">Add New Fund</div>
+          <div className="drawer-title">Add New {label}</div>
           <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="drawer-body">
           <div className="form-grid">
             <div className="field span2">
-              <label>Fund Name</label>
-              <input 
-                value={form.name} 
-                onChange={f("name")} 
-                placeholder="Fund IV" 
+              <label>{label} Name</label>
+              <input
+                value={form.name}
+                onChange={f("name")}
+                placeholder={isSPV ? "Company Name" : "Fund IV"}
               />
               <div style={{ fontSize: 11, color: "var(--ink-muted)", marginTop: 4 }}>
-                Will be prefixed with "Decisive Point" if not included
+                Will be prefixed with "{prefix.trim()}" if not included
               </div>
             </div>
             <div className="field">
@@ -3277,7 +3287,7 @@ function AddFundModal({ onClose }) {
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Create Fund</button>
+          <button className="btn btn-primary" onClick={handleSave}>Create {label}</button>
         </div>
       </div>
     </div>
