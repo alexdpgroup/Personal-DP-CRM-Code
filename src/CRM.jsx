@@ -317,7 +317,7 @@ const SEED_LPS = []; // Removed seed data - start fresh
 function calcCommitmentNAV(commitment, fundName, fundNAVData) {
   const data = fundNAVData[fundName];
   if (!data || !data.target || data.target <= 0) return 0;
-  return ((commitment || 0) / data.target) * (data.portfolioValue || 0);
+  return Math.round(((commitment || 0) / data.target) * (data.portfolioValue || 0));
 }
 
 const PORTFOLIO = []; // Removed seed data - will load from funds
@@ -537,6 +537,14 @@ export default function CRM({ session, onLogout }) {
           };
         }
       }
+      // Also ensure funds without portfolio data still have target info
+      for (const f of (funds || [])) {
+        if (!navDataMap[f.name]) {
+          navDataMap[f.name] = { portfolioValue: 0, target: f.target_amount || 0 };
+        }
+      }
+      console.log('NAV Data Map:', JSON.stringify(navDataMap));
+      console.log('Fund Target Map:', JSON.stringify(fundTargetMap));
       setFundMOICs(navDataMap);
 
       // Attach commitments to their LPs
