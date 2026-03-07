@@ -320,6 +320,39 @@ function calcCommitmentNAV(commitment, fundName, fundNAVData) {
   return Math.round(((commitment || 0) / data.target) * (data.portfolioValue || 0));
 }
 
+// Shared portfolio value calculation for a given fund
+function computeFundPortfolioValue(portfolioCompanies, fundName) {
+  const fundComps = portfolioCompanies
+    .map(comp => ({
+      ...comp,
+      allFinancings: comp.financings,
+      fundFinancings: comp.financings.filter(f => f.fund === fundName)
+    }))
+    .filter(comp => comp.fundFinancings.length > 0);
+
+  const getCompanySyncedFMV = (comp) => {
+    if (comp.manualFMV !== undefined && comp.manualFMV !== null) return comp.manualFMV;
+    if (comp.allFinancings.length > 0) {
+      const sorted = [...comp.allFinancings].sort((a, b) => new Date(b.date) - new Date(a.date));
+      return sorted[0]?.costPerShare || 0;
+    }
+    return 0;
+  };
+
+  return fundComps.reduce((total, comp) => {
+    const syncedFMV = getCompanySyncedFMV(comp);
+    return total + comp.fundFinancings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+      return s + (shares * fmv);
+    }, 0);
+  }, 0);
+}
+
 const PORTFOLIO = []; // Removed seed data - will load from funds
 
 function fmtMoney(n, short = false) {
@@ -478,73 +511,39 @@ export default function CRM({ session, onLogout }) {
         console.warn('Could not load portfolio for MOIC:', err);
       }
 
+      // Build portfolio in same format as FundPage for shared computation
+      const portfolioForNAV = (portfolioCompanies || []).map(comp => ({
+        manualFMV: comp.manual_fmv,
+        financings: (portfolioFinancings || [])
+          .filter(f => f.company_id === comp.id)
+          .map(f => ({
+            asset: f.asset,
+            fund: f.fund || '',
+            invested: parseFloat(f.invested) || 0,
+            shares: parseInt(f.shares),
+            costPerShare: parseFloat(f.cost_per_share) || 0,
+            fmvPerShare: parseFloat(f.fmv_per_share) || 0,
+            converted: f.converted !== undefined ? f.converted : true,
+            date: f.date,
+          })),
+      }));
+
       // Compute per-fund portfolio value for NAV calculation
-      // NAV formula: (commitment / fund_target) * portfolio_value
       const navDataMap = {};
-      const fundTargetMap = {};
-      for (const f of (funds || [])) {
-        fundTargetMap[f.name] = f.target_amount || 0;
+      const allFundNames = [...new Set((portfolioFinancings || []).map(f => f.fund).filter(Boolean))];
+      for (const fundName of allFundNames) {
+        navDataMap[fundName] = {
+          portfolioValue: computeFundPortfolioValue(portfolioForNAV, fundName),
+          target: 0,
+        };
       }
-
-      if (portfolioCompanies.length > 0) {
-        const companyMap = portfolioCompanies.map(comp => ({
-          manualFMV: comp.manual_fmv,
-          financings: portfolioFinancings
-            .filter(f => f.company_id === comp.id)
-            .map(f => ({
-              asset: f.asset,
-              fund: f.fund || '',
-              invested: parseFloat(f.invested) || 0,
-              shares: parseInt(f.shares) || 0,
-              costPerShare: parseFloat(f.cost_per_share) || 0,
-              fmvPerShare: parseFloat(f.fmv_per_share) || 0,
-              converted: f.converted !== undefined ? f.converted : true,
-              date: f.date,
-            })),
-        }));
-
-        const allFundNames = [...new Set(portfolioFinancings.map(f => f.fund).filter(Boolean))];
-
-        for (const fundName of allFundNames) {
-          let totalValue = 0;
-          for (const comp of companyMap) {
-            const fundFinancings = comp.financings.filter(f => f.fund === fundName);
-            if (fundFinancings.length === 0) continue;
-
-            let syncedFMV = 0;
-            if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
-              syncedFMV = comp.manualFMV;
-            } else if (comp.financings.length > 0) {
-              const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
-              syncedFMV = sortedByDate[0]?.costPerShare || 0;
-            }
-
-            for (const f of fundFinancings) {
-              const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
-              const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
-              if (isUnconverted) {
-                totalValue += f.invested;
-              } else if (!isUnconvertedWarrant) {
-                const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
-                const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
-                totalValue += shares * fmv;
-              }
-            }
-          }
-          navDataMap[fundName] = {
-            portfolioValue: totalValue,
-            target: fundTargetMap[fundName] || 0,
-          };
-        }
-      }
-      // Also ensure funds without portfolio data still have target info
       for (const f of (funds || [])) {
         if (!navDataMap[f.name]) {
           navDataMap[f.name] = { portfolioValue: 0, target: f.target_amount || 0 };
+        } else {
+          navDataMap[f.name].target = f.target_amount || 0;
         }
       }
-      console.log('NAV Data Map:', JSON.stringify(navDataMap));
-      console.log('Fund Target Map:', JSON.stringify(fundTargetMap));
       setFundMOICs(navDataMap);
 
       // Attach commitments to their LPs
@@ -3974,37 +3973,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
   }, [lps, fundName, investments]);
 
   // Compute portfolio value from portfolio companies (same logic as FundPortfolioTab)
-  const portfolioValue = useMemo(() => {
-    const fundComps = portfolio
-      .map(comp => ({
-        ...comp,
-        allFinancings: comp.financings,
-        financings: comp.financings.filter(f => f.fund === fundName)
-      }))
-      .filter(comp => comp.financings.length > 0);
-
-    const getCompanySyncedFMV = (comp) => {
-      if (comp.manualFMV !== undefined && comp.manualFMV !== null) return comp.manualFMV;
-      if (comp.allFinancings.length > 0) {
-        const sorted = [...comp.allFinancings].sort((a, b) => new Date(b.date) - new Date(a.date));
-        return sorted[0]?.costPerShare || 0;
-      }
-      return 0;
-    };
-
-    return fundComps.reduce((total, comp) => {
-      const syncedFMV = getCompanySyncedFMV(comp);
-      return total + comp.financings.reduce((s, f) => {
-        const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
-        if (isUnconverted) return s + f.invested;
-        const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
-        if (isUnconvertedWarrant) return s;
-        const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
-        const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
-        return s + (shares * fmv);
-      }, 0);
-    }, 0);
-  }, [portfolio, fundName]);
+  const portfolioValue = useMemo(() => computeFundPortfolioValue(portfolio, fundName), [portfolio, fundName]);
 
   if (loading) {
     return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
