@@ -1486,10 +1486,26 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onDelete, on
     }
   };
 
-  const addNote = () => {
+  const addNote = async () => {
     if (!newNote.trim()) return;
     const note = { date: new Date().toISOString().split("T")[0], author: "You", text: newNote };
-    const updated = { ...lp, notes: [...(lp.notes || []), note] };
+    const updatedNotes = [...(lp.notes || []), note];
+    if (lp.id) {
+      try {
+        const { error } = await supabase
+          .from('lps')
+          .update({ notes: updatedNotes })
+          .eq('id', lp.id);
+        if (error) {
+          alert('Error saving note: ' + error.message);
+          return;
+        }
+      } catch (err) {
+        alert('Error saving note: ' + err.message);
+        return;
+      }
+    }
+    const updated = { ...lp, notes: updatedNotes };
     onSave(updated);
     setNewNote("");
   };
