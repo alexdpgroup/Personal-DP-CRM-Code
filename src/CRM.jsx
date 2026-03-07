@@ -759,7 +759,7 @@ export default function CRM({ session, onLogout }) {
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
             {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} />}
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
-            {page === "portal" && <PortalPickerPage lps={lps} onSelect={setPortalLP} />}
+            {page === "portal" && <PortalPickerPage lps={lps} fundMOICs={fundMOICs} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
             {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
           </div>
@@ -3612,7 +3612,8 @@ Send them the portal URL and their credentials. They'll only see their own inves
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── PORTAL PICKER (for internal preview) ──────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function PortalPickerPage({ lps, onSelect }) {
+function PortalPickerPage({ lps, fundMOICs, onSelect }) {
+  const moics = fundMOICs || {};
   const eligible = lps.filter(l => {
     const totalCommit = (l.commitments && l.commitments.length > 0)
       ? l.commitments.reduce((s, c) => s + (c.commitment || 0), 0)
@@ -3637,7 +3638,7 @@ function PortalPickerPage({ lps, onSelect }) {
               {eligible.map(lp => {
                 const commitments = lp.commitments || [];
                 const totalCommit = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
-                const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0) || lp.funded || 0;
+                const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
                 const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                 const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? `${funds.length} funds` : lp.fund || "—";
                 return (
@@ -3650,7 +3651,7 @@ function PortalPickerPage({ lps, onSelect }) {
                   </td>
                   <td><span className="tag">{fundDisplay}</span></td>
                   <td>{fmtMoney(totalCommit)}</td>
-                  <td style={{ color: "var(--green)", fontWeight: 500 }}>{fmtMoney(totalFunded)}</td>
+                  <td style={{ color: "var(--green)", fontWeight: 500 }}>{fmtMoney(totalNAV)}</td>
                   <td><button className="btn btn-outline btn-sm"><Icon name="portal" size={13} /> View Portal</button></td>
                 </tr>
                 );
