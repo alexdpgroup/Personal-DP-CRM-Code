@@ -541,7 +541,7 @@ export default function CRM({ session, onLogout }) {
             commitment: parseFloat(c.commitment) || 0,
             funded: parseFloat(c.funded) || 0,
             nav: parseFloat(c.nav) || 0,
-            stage: c.stage || 'outreach',
+            stage: c.stage || lp.stage || 'outreach',
           }));
         return { ...lp, commitments: lpCommitments };
       });
@@ -605,19 +605,6 @@ export default function CRM({ session, onLogout }) {
             .update(updateFields)
             .eq('id', lp.id);
           if (error) console.error('Error saving LP:', lp.id, error);
-
-          // Persist per-commitment stage changes
-          if (lp.commitments) {
-            for (const c of lp.commitments) {
-              if (c.id && !String(c.id).startsWith('legacy-') && c.stage) {
-                const { error: cErr } = await supabase
-                  .from('lp_commitments')
-                  .update({ stage: c.stage })
-                  .eq('id', c.id);
-                if (cErr) console.error('Error saving commitment stage:', c.id, cErr);
-              }
-            }
-          }
         } catch (err) {
           console.error('Error saving LP:', lp.id, err);
         }
@@ -1008,7 +995,6 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
           commitment: commitment.commitment || 0,
           funded: commitment.funded || 0,
           nav: commitment.nav || 0,
-          stage: commitment.stage || lp.stage || 'outreach',
         })
         .select()
         .single();
@@ -1021,7 +1007,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
         commitment: parseFloat(newRow.commitment) || 0,
         funded: parseFloat(newRow.funded) || 0,
         nav: parseFloat(newRow.nav) || 0,
-        stage: newRow.stage || 'outreach',
+        stage: newRow.stage || lp.stage || 'outreach',
       };
       const updatedLP = { ...lp, commitments: [...(lp.commitments || []), newCommitment] };
       saveLPAtIndex(lpIdx, updatedLP);
@@ -1037,13 +1023,14 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
     if (!existingCommitment) return;
 
     const isLegacy = String(existingCommitment.id).startsWith('legacy-');
-    const merged = {
+    const mergedStage = updated.stage !== undefined ? updated.stage : existingCommitment.stage || 'outreach';
+    const mergedDb = {
       fund: updated.fund !== undefined ? updated.fund : existingCommitment.fund,
       commitment: updated.commitment !== undefined ? updated.commitment : existingCommitment.commitment,
       funded: updated.funded !== undefined ? updated.funded : existingCommitment.funded,
       nav: updated.nav !== undefined ? updated.nav : existingCommitment.nav,
-      stage: updated.stage !== undefined ? updated.stage : existingCommitment.stage || 'outreach',
     };
+    const merged = { ...mergedDb, stage: mergedStage };
 
     try {
       let newId = existingCommitment.id;
@@ -1051,7 +1038,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
         // Migrate legacy commitment to lp_commitments table
         const { data: newRow, error } = await supabase
           .from('lp_commitments')
-          .insert({ lp_id: lp.id, ...merged })
+          .insert({ lp_id: lp.id, ...mergedDb })
           .select()
           .single();
         if (error) throw error;
@@ -1059,7 +1046,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
       } else {
         const { error } = await supabase
           .from('lp_commitments')
-          .update(merged)
+          .update(mergedDb)
           .eq('id', existingCommitment.id);
         if (error) throw error;
       }
