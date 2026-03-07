@@ -761,7 +761,7 @@ export default function CRM({ session, onLogout }) {
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} fundMOICs={fundMOICs} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
-            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
+            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} setFundDefs={setFundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
           </div>
         </main>
 
@@ -3763,7 +3763,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FUND PAGE ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPortal }) {
+function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, saveLPs, onPortal }) {
   const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
@@ -3771,7 +3771,9 @@ function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPor
   const [contacts, setContacts] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
   const [loading, setLoading] = useState(true);
-  
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetInput, setTargetInput] = useState('');
+
   const fd = (fundDefs || FUND_DEFS).find(f => f.name === fundName) || FUND_DEFS[0];
 
   useEffect(() => {
@@ -3901,6 +3903,22 @@ function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPor
     }
   };
 
+  const saveTarget = async () => {
+    const newTarget = parseFloat(targetInput.replace(/[^0-9.]/g, ''));
+    if (isNaN(newTarget) || newTarget < 0) return;
+    try {
+      if (fd.id) {
+        await supabase.from('funds').update({ target_amount: newTarget }).eq('id', fd.id);
+      }
+      if (setFundDefs) {
+        setFundDefs(prev => (prev || []).map(f => f.name === fundName ? { ...f, target: newTarget } : f));
+      }
+    } catch (err) {
+      console.error('Error saving target:', err);
+    }
+    setEditingTarget(false);
+  };
+
   // Merge LPs that have commitments labeled for this fund (from lp_commitments table)
   const allInvestments = useMemo(() => {
     if (!lps) return investments;
@@ -3968,7 +3986,31 @@ function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPor
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Target Raise</div>
-            <div style={{ fontFamily: "var(--serif)", fontSize: 28, color: "var(--gold-dark)" }}>{fmtMoney(fd.target, true)}</div>
+            {editingTarget ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
+                <input
+                  autoFocus
+                  value={targetInput}
+                  onChange={e => setTargetInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") saveTarget(); if (e.key === "Escape") setEditingTarget(false); }}
+                  style={{ fontFamily: "var(--serif)", fontSize: 22, width: 160, textAlign: "right", border: "1.5px solid var(--gold)", borderRadius: 6, padding: "4px 10px", outline: "none", color: "var(--gold-dark)" }}
+                  placeholder="e.g. 50000000"
+                />
+                <button className="btn btn-primary btn-sm" onClick={saveTarget}>Save</button>
+                <button className="btn btn-outline btn-sm" onClick={() => setEditingTarget(false)}>Cancel</button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
+                <span style={{ fontFamily: "var(--serif)", fontSize: 28, color: "var(--gold-dark)" }}>{fmtMoney(fd.target, true)}</span>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => { setTargetInput(String(fd.target || '')); setEditingTarget(true); }}
+                  style={{ fontSize: 11, padding: "3px 10px" }}
+                >
+                  <Icon name="edit" size={12} /> Edit
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
