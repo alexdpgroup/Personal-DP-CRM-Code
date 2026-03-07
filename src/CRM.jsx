@@ -3562,11 +3562,9 @@ Send them the portal URL and their credentials. They'll only see their own inves
 function PortalPickerPage({ lps, fundMOICs, onSelect }) {
   const moics = fundMOICs || {};
   const eligible = lps.filter(l => {
-    const totalCommit = (l.commitments && l.commitments.length > 0)
-      ? l.commitments.reduce((s, c) => s + (c.commitment || 0), 0)
-      : (l.commitment || 0);
-    const lpStage = l.commitments?.length > 0 ? mostAdvancedStage(l.commitments) : (l.stage || "outreach");
-    return lpStage === "closed" && totalCommit > 0;
+    const closedCommitments = (l.commitments || []).filter(c => c.stage === 'closed');
+    const totalCommit = closedCommitments.reduce((s, c) => s + (c.commitment || 0), 0);
+    return closedCommitments.length > 0 && totalCommit > 0;
   });
 
   return (
@@ -3583,8 +3581,8 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
             </thead>
             <tbody>
               {eligible.map(lp => {
-                const commitments = lp.commitments || [];
-                const totalCommit = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
+                const commitments = (lp.commitments || []).filter(c => c.stage === 'closed');
+                const totalCommit = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
                 const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
                 const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                 const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? `${funds.length} funds` : lp.fund || "—";
@@ -3617,7 +3615,7 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function InvestorPortal({ lp, fundMOICs, onExit }) {
   const moics = fundMOICs || {};
-  const commitments = lp.commitments || [];
+  const commitments = (lp.commitments || []).filter(c => c.stage === 'closed');
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0) || lp.funded || 0;
   const totalCalled = commitments.reduce((s, c) => s + (c.called || 0), 0) || lp.called || 0;
