@@ -3936,10 +3936,13 @@ function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPor
   const closedInvestments = allInvestments.filter(inv => inv.stage === "closed");
   const pipelineInvestments = allInvestments.filter(inv => inv.stage !== "closed");
   const committed = allInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
+  const closedCommitted = closedInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
   const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
   const nav = allInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
+  const closedPct = fd.target > 0 ? (closedCommitted / fd.target) * 100 : 0;
   const oversubscribed = committed > fd.target;
+  const closedOversubscribed = closedCommitted > fd.target;
   const shortName = fundName.replace("Decisive Point ", "");
 
   // pipeline by stage
@@ -3969,23 +3972,50 @@ function FundPage({ fundName, fundDefs, fundMOICs, partners, lps, saveLPs, onPor
           </div>
         </div>
 
-        {/* Progress bar */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <span style={{ fontFamily: "var(--serif)", fontSize: 24, color: oversubscribed ? "var(--green)" : "var(--gold-dark)" }}>
-            {fmtMoney(committed, true)}
+        {/* Potential Commitments bar (all stages) */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-muted)" }}>
+            Potential Commitments
+            <span style={{ fontFamily: "var(--serif)", fontSize: 20, color: oversubscribed ? "var(--green)" : "var(--gold-dark)", marginLeft: 10 }}>
+              {fmtMoney(committed, true)}
+            </span>
           </span>
-          <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+          <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
             {Math.round(pct)}% of target
             {oversubscribed && <span style={{ color: "var(--green)", marginLeft: 8, fontWeight: 600 }}>+{fmtMoney(committed - fd.target, true)} over</span>}
           </span>
         </div>
-        <div className="progress-track" style={{ height: 10, marginBottom: 18 }}>
+        <div className="progress-track" style={{ height: 8, marginBottom: 14 }}>
           <div style={{
             height: "100%", borderRadius: 5,
             background: oversubscribed
               ? "linear-gradient(90deg, var(--gold), var(--green))"
               : "linear-gradient(90deg, var(--gold), #a07de8)",
             width: `${Math.min(pct, 100)}%`,
+            transition: "width 0.6s ease",
+          }} />
+        </div>
+
+        {/* Closed Commitments bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-muted)" }}>
+            Closed Commitments
+            <span style={{ fontFamily: "var(--serif)", fontSize: 20, color: closedOversubscribed ? "var(--green)" : "var(--ink)", marginLeft: 10 }}>
+              {fmtMoney(closedCommitted, true)}
+            </span>
+          </span>
+          <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+            {Math.round(closedPct)}% of target
+            {closedOversubscribed && <span style={{ color: "var(--green)", marginLeft: 8, fontWeight: 600 }}>+{fmtMoney(closedCommitted - fd.target, true)} over</span>}
+          </span>
+        </div>
+        <div className="progress-track" style={{ height: 8, marginBottom: 18 }}>
+          <div style={{
+            height: "100%", borderRadius: 5,
+            background: closedOversubscribed
+              ? "linear-gradient(90deg, #2e7d32, var(--green))"
+              : "linear-gradient(90deg, #555, #888)",
+            width: `${Math.min(closedPct, 100)}%`,
             transition: "width 0.6s ease",
           }} />
         </div>
