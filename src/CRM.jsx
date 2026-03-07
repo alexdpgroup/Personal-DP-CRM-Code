@@ -313,6 +313,13 @@ const FUND_DEFS = []; // Cleared - load from database only
 
 const SEED_LPS = []; // Removed seed data - start fresh
 
+// NAV helper: (commitment / fund_target) * portfolio_value
+function calcCommitmentNAV(commitment, fundName, fundNAVData) {
+  const data = fundNAVData[fundName];
+  if (!data || !data.target || data.target <= 0) return 0;
+  return ((commitment || 0) / data.target) * (data.portfolioValue || 0);
+}
+
 const PORTFOLIO = []; // Removed seed data - will load from funds
 
 function fmtMoney(n, short = false) {
@@ -471,10 +478,15 @@ export default function CRM({ session, onLogout }) {
         console.warn('Could not load portfolio for MOIC:', err);
       }
 
-      // Compute per-fund blended MOIC: totalValue / totalInvested
-      const moicMap = {};
+      // Compute per-fund portfolio value for NAV calculation
+      // NAV formula: (commitment / fund_target) * portfolio_value
+      const navDataMap = {};
+      const fundTargetMap = {};
+      for (const f of (funds || [])) {
+        fundTargetMap[f.name] = f.target_amount || 0;
+      }
+
       if (portfolioCompanies.length > 0) {
-        // Build company map with financings
         const companyMap = portfolioCompanies.map(comp => ({
           manualFMV: comp.manual_fmv,
           financings: portfolioFinancings
@@ -491,17 +503,14 @@ export default function CRM({ session, onLogout }) {
             })),
         }));
 
-        // Collect all fund names that have financings
         const allFundNames = [...new Set(portfolioFinancings.map(f => f.fund).filter(Boolean))];
 
         for (const fundName of allFundNames) {
-          let totalInvested = 0;
           let totalValue = 0;
           for (const comp of companyMap) {
             const fundFinancings = comp.financings.filter(f => f.fund === fundName);
             if (fundFinancings.length === 0) continue;
 
-            // Synced FMV: manual override > most recent financing date > last entered
             let syncedFMV = 0;
             if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
               syncedFMV = comp.manualFMV;
@@ -512,8 +521,6 @@ export default function CRM({ session, onLogout }) {
 
             for (const f of fundFinancings) {
               const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
-              if (!isUnconvertedWarrant) totalInvested += f.invested;
-
               const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
               if (isUnconverted) {
                 totalValue += f.invested;
@@ -524,12 +531,13 @@ export default function CRM({ session, onLogout }) {
               }
             }
           }
-          if (totalInvested > 0) {
-            moicMap[fundName] = totalValue / totalInvested;
-          }
+          navDataMap[fundName] = {
+            portfolioValue: totalValue,
+            target: fundTargetMap[fundName] || 0,
+          };
         }
       }
-      setFundMOICs(moicMap);
+      setFundMOICs(navDataMap);
 
       // Attach commitments to their LPs
       const lpsWithCommitments = (lpsData || []).map(lp => {
@@ -796,8 +804,8 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
     return s + (l.funded || 0);
   }, 0);
   const totalNAV = safeLps.reduce((s, l) => {
-    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0);
-    return s + ((l.funded || 0) * (fundMOICs[l.fund] || 1));
+    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
+    return s + calcCommitmentNAV(l.commitment, l.fund, fundMOICs);
   }, 0);
   const pipelineCount = safeLps.filter(l => getLPStage(l) !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
@@ -966,7 +974,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
   // Totals
   const totalCommitment = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
   const totalFunded = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.funded || 0), 0), 0);
-  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0), 0);
+  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0), 0);
 
   const saveLPAtIndex = (lpIdx, updatedLP) => {
     const updated = lps.map(l => l.id === updatedLP.id ? updatedLP : l);
@@ -1167,7 +1175,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                   const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
                   const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
                   const lpCalled = commitments.reduce((ss, c) => ss + (c.called || 0), 0);
-                  const lpNAV = commitments.reduce((ss, c) => ss + ((c.funded || 0) * (fundMOICs[c.fund] || 1)), 0);
+                  const lpNAV = commitments.reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
                   const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                   const fundDisplay = fundsInvested.length === 1
                     ? fundsInvested[0].replace("Decisive Point ", "")
@@ -1248,9 +1256,9 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.called ? fmtMoney(commit.called) : "—"}</td>
-                        {(() => { const calcNAV = (commit.funded || 0) * (fundMOICs[commit.fund] || 1); return (
-                        <td style={{ textAlign: "right", fontSize: 12, color: calcNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
-                          {calcNAV ? fmtMoney(calcNAV) : "—"}
+                        {(() => { const cNAV = calcCommitmentNAV(commit.commitment, commit.fund, fundMOICs); return (
+                        <td style={{ textAlign: "right", fontSize: 12, color: cNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
+                          {cNAV ? fmtMoney(cNAV) : "—"}
                         </td>
                         ); })()}
                         <td>
@@ -1437,7 +1445,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateComm
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0);
   const moics = fundMOICs || {};
-  const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
+  const totalNAV = commitments.reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, moics), 0);
 
   useEffect(() => {
     if (tab === "contacts") {
@@ -1560,7 +1568,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateComm
                           <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
                             <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
                             <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
-                            {(() => { const cNAV = (c.funded || 0) * (moics[c.fund] || 1); return (
+                            {(() => { const cNAV = calcCommitmentNAV(c.commitment, c.fund, moics); return (
                             <span title="NAV" style={{ color: cNAV > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{cNAV ? fmtMoney(cNAV) : "—"}</span>
                             ); })()}
                           </div>
@@ -3597,7 +3605,7 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
               {eligible.map(lp => {
                 const commitments = (lp.commitments || []).filter(c => c.stage === 'closed');
                 const totalCommit = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
-                const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
+                const totalNAV = commitments.reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, moics), 0);
                 const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                 const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? `${funds.length} funds` : lp.fund || "—";
                 return (
@@ -3633,7 +3641,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0) || lp.commitment || 0;
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0) || lp.funded || 0;
   const totalCalled = commitments.reduce((s, c) => s + (c.called || 0), 0) || lp.called || 0;
-  const totalNAV = commitments.reduce((s, c) => s + ((c.funded || 0) * (moics[c.fund] || 1)), 0);
+  const totalNAV = commitments.reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, moics), 0);
   const totalReturn = totalNAV - totalFunded;
   const returnPct = totalFunded > 0 ? ((totalNAV / totalFunded - 1) * 100).toFixed(1) : 0;
   const totalDistributions = (lp.distributions || []).reduce((s, d) => s + d.amount, 0);
@@ -3949,7 +3957,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
           stage: commitment?.stage || lp.stage || 'outreach',
           commitment: commitment?.commitment || 0,
           funded: commitment?.funded || 0,
-          nav: (commitment?.funded || 0) * (fundMOICs[fundName] || 1),
+          nav: calcCommitmentNAV(commitment?.commitment, fundName, fundMOICs),
           contact: lp,
         };
       });
@@ -4296,9 +4304,11 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
                         <td style={{ fontSize: 13 }}>{inv.partner || inv.contact?.partner || '—'}</td>
                         <td style={{ fontWeight: 500 }}>{inv.commitment ? fmtMoney(inv.commitment) : "—"}</td>
                         <td>{inv.funded ? fmtMoney(inv.funded) : "—"}</td>
-                        <td style={{ color: inv.nav > inv.funded ? "var(--green)" : "var(--ink)" }}>
-                          {inv.nav ? fmtMoney(inv.nav) : "—"}
+                        {(() => { const invNAV = calcCommitmentNAV(inv.commitment, fundName, fundMOICs); return (
+                        <td style={{ color: invNAV > inv.funded ? "var(--green)" : "var(--ink)" }}>
+                          {invNAV ? fmtMoney(invNAV) : "—"}
                         </td>
+                        ); })()}
                       </tr>
                     );
                   })}
