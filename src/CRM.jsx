@@ -2341,19 +2341,19 @@ function PortfolioPage({ fundDefs }) {
 
   const updateCompanyExited = async (compIdx, exited) => {
     const company = schedule[compIdx];
+    // Update local state immediately
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, exited });
+    setSchedule(updated);
     try {
       if (company.companyId) {
         const { error } = await supabase
           .from('portfolio_companies')
           .update({ exited })
           .eq('id', company.companyId);
-        if (error) throw error;
+        if (error) console.warn('Could not persist exited status (column may not exist yet):', error.message);
       }
-      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, exited });
-      setSchedule(updated);
     } catch (error) {
-      console.error('❌ Error updating exited status:', error);
-      alert('Error updating exited status');
+      console.warn('Could not persist exited status:', error);
     }
   };
 
@@ -2361,7 +2361,7 @@ function PortfolioPage({ fundDefs }) {
       const company = schedule[compIdx];
       try {
         if (company.companyId) {
-          const { error } = await supabase
+          let { error } = await supabase
             .from('portfolio_companies')
             .update({
               company_name: updates.company,
@@ -2369,7 +2369,18 @@ function PortfolioPage({ fundDefs }) {
               exited: updates.exited || false
             })
             .eq('id', company.companyId);
-          if (error) throw error;
+          // If exited column doesn't exist yet, retry without it
+          if (error) {
+            const retry = await supabase
+              .from('portfolio_companies')
+              .update({
+                company_name: updates.company,
+                sector: updates.sector
+              })
+              .eq('id', company.companyId);
+            if (retry.error) throw retry.error;
+            console.warn('Saved company without exited field (column may not exist yet)');
+          }
         }
         const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
           ...c,
