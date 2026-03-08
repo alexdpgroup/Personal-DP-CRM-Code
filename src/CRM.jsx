@@ -639,12 +639,19 @@ export default function CRM({ session, onLogout }) {
     try {
       if (fund.id) {
         // Delete related lp_commitments that reference this fund by name
-        await supabase.from('lp_commitments').delete().eq('fund_name', fund.name);
+        const { error: commErr } = await supabase.from('lp_commitments').delete().eq('fund', fund.name);
+        if (commErr) console.warn('lp_commitments delete:', commErr.message);
         // Delete related investment records (lps tied to this fund)
-        await supabase.from('lps').delete().eq('fund_id', fund.id);
+        const { error: lpErr } = await supabase.from('lps').delete().eq('fund_id', fund.id);
+        if (lpErr) console.warn('lps delete:', lpErr.message);
         // Delete the fund itself
-        const { error } = await supabase.from('funds').delete().eq('id', fund.id);
+        const { data: deleted, error } = await supabase.from('funds').delete().eq('id', fund.id).select();
         if (error) throw error;
+        if (!deleted || deleted.length === 0) {
+          // RLS is blocking the delete
+          alert('Could not delete fund — your database security policies may not allow it.\n\nPlease run the following SQL in your Supabase SQL Editor:\n\nCREATE POLICY "Allow delete for authenticated users" ON funds FOR DELETE USING (true);\nCREATE POLICY "Allow delete for authenticated users" ON lps FOR DELETE USING (true);');
+          return;
+        }
       }
       setFundDefs(prev => (prev || []).filter(f => f.name !== fund.name));
       if (activeFund === fund.name) { setPage("dashboard"); setActiveFund(null); }
