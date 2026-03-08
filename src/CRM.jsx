@@ -3864,6 +3864,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
             <div className="portal-row"><span className="lbl">Commitment</span><span className="val">{fmtMoney(totalCommitment)}</span></div>
             <div className="portal-row"><span className="lbl">Capital Called</span><span className="val">{fmtMoney(totalCalled)}</span></div>
             <div className="portal-row"><span className="lbl">Uncalled Capital</span><span className="val">{fmtMoney(totalCommitment - totalCalled)}</span></div>
+            <div className="portal-row"><span className="lbl">Unfunded Capital</span><span className="val">{fmtMoney(totalCalled - totalFunded)}</span></div>
           </div>
 
           {/* Distributions */}
