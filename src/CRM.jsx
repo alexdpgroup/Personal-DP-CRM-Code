@@ -893,8 +893,8 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
     return s + (l.funded || 0);
   }, 0);
   const totalNAV = safeLps.reduce((s, l) => {
-    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
-    return s + calcCommitmentNAV(l.commitment, l.fund, fundMOICs);
+    if (l.commitments && l.commitments.length > 0) return s + l.commitments.filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
+    return s;
   }, 0);
   const pipelineCount = safeLps.filter(l => getLPStage(l) !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
@@ -1063,7 +1063,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
   // Totals
   const totalCommitment = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
   const totalFunded = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.funded || 0), 0), 0);
-  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0), 0);
+  const totalNAV = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0), 0);
 
   const saveLPAtIndex = (lpIdx, updatedLP) => {
     const updated = lps.map(l => l.id === updatedLP.id ? updatedLP : l);
@@ -1264,7 +1264,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                   const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
                   const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
                   const lpCalled = commitments.reduce((ss, c) => ss + (c.called || 0), 0);
-                  const lpNAV = commitments.reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
+                  const lpNAV = commitments.filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
                   const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
                   const fundDisplay = fundsInvested.length === 1
                     ? fundsInvested[0].replace("Decisive Point ", "")
@@ -1345,7 +1345,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
                         <td style={{ textAlign: "right", fontSize: 12 }}>{commit.called ? fmtMoney(commit.called) : "—"}</td>
-                        {(() => { const cNAV = calcCommitmentNAV(commit.commitment, commit.fund, fundMOICs); return (
+                        {(() => { const cNAV = (commit.stage === 'closed') ? calcCommitmentNAV(commit.commitment, commit.fund, fundMOICs) : 0; return (
                         <td style={{ textAlign: "right", fontSize: 12, color: cNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
                           {cNAV ? fmtMoney(cNAV) : "—"}
                         </td>
@@ -1534,7 +1534,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateComm
   const totalCommitment = commitments.reduce((s, c) => s + (c.commitment || 0), 0);
   const totalFunded = commitments.reduce((s, c) => s + (c.funded || 0), 0);
   const moics = fundMOICs || {};
-  const totalNAV = commitments.reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, moics), 0);
+  const totalNAV = commitments.filter(c => c.stage === 'closed').reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, moics), 0);
 
   useEffect(() => {
     if (tab === "contacts") {
@@ -1657,7 +1657,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateComm
                           <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
                             <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
                             <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
-                            {(() => { const cNAV = calcCommitmentNAV(c.commitment, c.fund, moics); return (
+                            {(() => { const cNAV = (c.stage === 'closed') ? calcCommitmentNAV(c.commitment, c.fund, moics) : 0; return (
                             <span title="NAV" style={{ color: cNAV > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{cNAV ? fmtMoney(cNAV) : "—"}</span>
                             ); })()}
                           </div>
@@ -4116,7 +4116,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
   const committed = allInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
   const closedCommitted = closedInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
   const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
-  const nav = allInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
+  const nav = closedInvestments.reduce((s, inv) => s + (inv.nav || 0), 0);
 
   const pct = fd.target > 0 ? (committed / fd.target) * 100 : 0;
   const closedPct = fd.target > 0 ? (closedCommitted / fd.target) * 100 : 0;
@@ -4389,7 +4389,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
                         <td style={{ fontSize: 13 }}>{inv.partner || inv.contact?.partner || '—'}</td>
                         <td style={{ fontWeight: 500 }}>{inv.commitment ? fmtMoney(inv.commitment) : "—"}</td>
                         <td>{inv.funded ? fmtMoney(inv.funded) : "—"}</td>
-                        {(() => { const invNAV = calcCommitmentNAV(inv.commitment, fundName, fundMOICs); return (
+                        {(() => { const invNAV = inv.stage === 'closed' ? calcCommitmentNAV(inv.commitment, fundName, fundMOICs) : 0; return (
                         <td style={{ color: invNAV > inv.funded ? "var(--green)" : "var(--ink)" }}>
                           {invNAV ? fmtMoney(invNAV) : "—"}
                         </td>
