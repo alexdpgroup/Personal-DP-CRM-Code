@@ -456,6 +456,8 @@ export default function CRM({ session, onLogout }) {
   const [portalLP, setPortalLP] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddFund, setShowAddFund] = useState(null); // null, "fund", or "spv"
+  const [editingFund, setEditingFund] = useState(null); // fund object being edited
+  const [sidebarMenu, setSidebarMenu] = useState(null); // fund name for open context menu
   
   useEffect(() => {
     loadFromSupabase();
@@ -632,6 +634,40 @@ export default function CRM({ session, onLogout }) {
   const goFund = (fundName) => { setActiveFund(fundName); setPage("fund"); };
   const goPage = (p) => { setPage(p); setActiveFund(null); };
 
+  const handleDeleteFund = async (fund) => {
+    if (!window.confirm(`Are you sure you want to delete "${fund.name}"? This cannot be undone.`)) return;
+    try {
+      if (fund.id) {
+        await supabase.from('funds').delete().eq('id', fund.id);
+      }
+      setFundDefs(prev => (prev || []).filter(f => f.name !== fund.name));
+      if (activeFund === fund.name) { setPage("dashboard"); setActiveFund(null); }
+    } catch (err) {
+      console.error('Error deleting fund:', err);
+      alert('Error deleting fund: ' + err.message);
+    }
+    setSidebarMenu(null);
+  };
+
+  const handleEditFund = async (fund, updates) => {
+    try {
+      if (fund.id) {
+        const dbUpdates = {};
+        if (updates.target !== undefined) dbUpdates.target_amount = updates.target;
+        if (updates.vintage !== undefined) dbUpdates.vintage = updates.vintage;
+        if (updates.status !== undefined) dbUpdates.status = updates.status;
+        if (updates.name !== undefined) dbUpdates.name = updates.name;
+        await supabase.from('funds').update(dbUpdates).eq('id', fund.id);
+      }
+      setFundDefs(prev => (prev || []).map(f => f.name === fund.name ? { ...f, ...updates } : f));
+      if (updates.name && activeFund === fund.name) setActiveFund(updates.name);
+      setEditingFund(null);
+    } catch (err) {
+      console.error('Error updating fund:', err);
+      alert('Error updating fund: ' + err.message);
+    }
+  };
+
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", fontFamily: "var(--sans)", color: "var(--ink-muted)" }}>
       <style>{CSS}</style>
@@ -701,13 +737,29 @@ export default function CRM({ session, onLogout }) {
                       <div
                         key={f.name}
                         className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
-                        style={{ fontSize: 13 }}
+                        style={{ fontSize: 13, position: "relative" }}
                         onClick={() => goFund(f.name)}
                       >
                         <Icon name="fund" size={14} />
                         <span style={{ flex: 1 }}>{f.name.replace("Decisive Point Fund ", "Fund ")}</span>
                         {f.status === "raising" && (
                           <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
+                        )}
+                        <span
+                          onClick={e => { e.stopPropagation(); setSidebarMenu(sidebarMenu === f.name ? null : f.name); }}
+                          style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 4, fontSize: 14, color: "rgba(255,255,255,0.4)", lineHeight: 1 }}
+                          onMouseEnter={e => e.currentTarget.style.color = "rgba(255,255,255,0.8)"}
+                          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
+                        >⋯</span>
+                        {sidebarMenu === f.name && (
+                          <div style={{ position: "absolute", right: 8, top: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", zIndex: 200, minWidth: 120, overflow: "hidden" }}>
+                            <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--ink)", cursor: "pointer" }} onClick={e => { e.stopPropagation(); setSidebarMenu(null); setEditingFund(f); }} onMouseEnter={e => e.currentTarget.style.background = "var(--surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <Icon name="edit" size={12} /> Edit
+                            </div>
+                            <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--red)", cursor: "pointer" }} onClick={e => { e.stopPropagation(); handleDeleteFund(f); }} onMouseEnter={e => e.currentTarget.style.background = "var(--red-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <Icon name="close" size={12} /> Delete
+                            </div>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -730,13 +782,29 @@ export default function CRM({ session, onLogout }) {
                       <div
                         key={f.name}
                         className={`sidebar-link ${page === "fund" && activeFund === f.name ? "active" : ""}`}
-                        style={{ fontSize: 13 }}
+                        style={{ fontSize: 13, position: "relative" }}
                         onClick={() => goFund(f.name)}
                       >
                         <Icon name="fund" size={14} />
                         <span style={{ flex: 1 }}>{f.name.replace("Decisive Point - ", "")}</span>
                         {f.status === "raising" && (
                           <span style={{ fontSize: 10, background: "rgba(127,77,218,0.25)", color: "var(--gold)", borderRadius: 8, padding: "1px 6px", fontWeight: 600 }}>LIVE</span>
+                        )}
+                        <span
+                          onClick={e => { e.stopPropagation(); setSidebarMenu(sidebarMenu === f.name ? null : f.name); }}
+                          style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 4, fontSize: 14, color: "rgba(255,255,255,0.4)", lineHeight: 1 }}
+                          onMouseEnter={e => e.currentTarget.style.color = "rgba(255,255,255,0.8)"}
+                          onMouseLeave={e => e.currentTarget.style.color = "rgba(255,255,255,0.4)"}
+                        >⋯</span>
+                        {sidebarMenu === f.name && (
+                          <div style={{ position: "absolute", right: 8, top: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, boxShadow: "var(--shadow-md)", zIndex: 200, minWidth: 120, overflow: "hidden" }}>
+                            <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--ink)", cursor: "pointer" }} onClick={e => { e.stopPropagation(); setSidebarMenu(null); setEditingFund(f); }} onMouseEnter={e => e.currentTarget.style.background = "var(--surface)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <Icon name="edit" size={12} /> Edit
+                            </div>
+                            <div style={{ padding: "8px 14px", fontSize: 12, color: "var(--red)", cursor: "pointer" }} onClick={e => { e.stopPropagation(); handleDeleteFund(f); }} onMouseEnter={e => e.currentTarget.style.background = "var(--red-bg)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                              <Icon name="close" size={12} /> Delete
+                            </div>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -757,7 +825,7 @@ export default function CRM({ session, onLogout }) {
         </nav>
 
         {/* Main */}
-        <main className="main">
+        <main className="main" onClick={() => sidebarMenu && setSidebarMenu(null)}>
           <header className="topbar">
             <span className="topbar-title">{titleMap[page]}</span>
             <div className="topbar-right">
@@ -789,6 +857,7 @@ export default function CRM({ session, onLogout }) {
         </main>
 
         {showAddFund && <AddFundModal type={showAddFund} onClose={() => setShowAddFund(null)} />}
+        {editingFund && <EditFundModal fund={editingFund} onClose={() => setEditingFund(null)} onSave={(updates) => handleEditFund(editingFund, updates)} />}
       </div>
     </>
   );
@@ -3309,6 +3378,69 @@ function AddFundModal({ type = "fund", onClose }) {
   );
 }
 
+// ── Edit Fund/SPV Modal ──────────────────────────────────────────────────────
+function EditFundModal({ fund, onClose, onSave }) {
+  const isSPV = fund.name?.includes("Decisive Point -");
+  const label = isSPV ? "SPV" : "Fund";
+  const [form, setForm] = useState({
+    name: fund.name || "",
+    vintage: fund.vintage || new Date().getFullYear(),
+    target: fund.target || 0,
+    status: fund.status || "raising"
+  });
+
+  const handleSave = () => {
+    if (!form.name.trim() || form.target <= 0) {
+      alert(`Please enter a ${label.toLowerCase()} name and target amount`);
+      return;
+    }
+    const updates = {};
+    if (form.name !== fund.name) updates.name = form.name;
+    if (form.vintage !== fund.vintage) updates.vintage = form.vintage;
+    if (form.target !== fund.target) updates.target = form.target;
+    if (form.status !== fund.status) updates.status = form.status;
+    onSave(updates);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Edit {label}</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2">
+              <label>{label} Name</label>
+              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div className="field">
+              <label>Vintage Year</label>
+              <input type="number" value={form.vintage} onChange={e => setForm({ ...form, vintage: parseInt(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label>Target Raise ($)</label>
+              <input type="number" value={form.target} onChange={e => setForm({ ...form, target: parseFloat(e.target.value) })} />
+            </div>
+            <div className="field span2">
+              <label>Status</label>
+              <select value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
+                <option value="raising">Raising</option>
+                <option value="closed">Closed</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave}>Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── SETTINGS PAGE ─────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -3796,8 +3928,6 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
   const [contacts, setContacts] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [editingTarget, setEditingTarget] = useState(false);
-  const [targetInput, setTargetInput] = useState('');
 
   const fd = (fundDefs || FUND_DEFS).find(f => f.name === fundName) || FUND_DEFS[0];
 
@@ -3928,21 +4058,6 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
     }
   };
 
-  const saveTarget = async () => {
-    const newTarget = parseFloat(targetInput.replace(/[^0-9.]/g, ''));
-    if (isNaN(newTarget) || newTarget < 0) return;
-    try {
-      if (fd.id) {
-        await supabase.from('funds').update({ target_amount: newTarget }).eq('id', fd.id);
-      }
-      if (setFundDefs) {
-        setFundDefs(prev => (prev || []).map(f => f.name === fundName ? { ...f, target: newTarget } : f));
-      }
-    } catch (err) {
-      console.error('Error saving target:', err);
-    }
-    setEditingTarget(false);
-  };
 
   // Merge LPs that have commitments labeled for this fund (from lp_commitments table)
   const allInvestments = useMemo(() => {
@@ -4015,31 +4130,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Target Raise</div>
-            {editingTarget ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}>
-                <input
-                  autoFocus
-                  value={targetInput}
-                  onChange={e => setTargetInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter") saveTarget(); if (e.key === "Escape") setEditingTarget(false); }}
-                  style={{ fontFamily: "var(--serif)", fontSize: 22, width: 160, textAlign: "right", border: "1.5px solid var(--gold)", borderRadius: 6, padding: "4px 10px", outline: "none", color: "var(--gold-dark)" }}
-                  placeholder="e.g. 50000000"
-                />
-                <button className="btn btn-primary btn-sm" onClick={saveTarget}>Save</button>
-                <button className="btn btn-outline btn-sm" onClick={() => setEditingTarget(false)}>Cancel</button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "flex-end" }}>
-                <span style={{ fontFamily: "var(--serif)", fontSize: 28, color: "var(--gold-dark)" }}>{fmtMoney(fd.target, true)}</span>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() => { setTargetInput(String(fd.target || '')); setEditingTarget(true); }}
-                  style={{ fontSize: 11, padding: "3px 10px" }}
-                >
-                  <Icon name="edit" size={12} /> Edit
-                </button>
-              </div>
-            )}
+            <span style={{ fontFamily: "var(--serif)", fontSize: 28, color: "var(--gold-dark)" }}>{fmtMoney(fd.target, true)}</span>
           </div>
         </div>
 
