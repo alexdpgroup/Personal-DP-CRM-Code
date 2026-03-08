@@ -3842,6 +3842,9 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
             <div style={{ fontSize: 13, color: totalNAV >= totalFunded ? "var(--green)" : "var(--red)" }}>
               {totalNAV >= totalFunded ? "▲" : "▼"} {fmtMoney(Math.abs(totalReturn))} ({returnPct}%)
             </div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 8 }}>
+              Multiple: <span style={{ fontWeight: 600, color: "var(--ink)" }}>{totalFunded > 0 ? (totalNAV / totalFunded).toFixed(2) + "x" : "—"}</span>
+            </div>
           </div>
 
           <div className="portal-card" style={{ borderTop: "3px solid var(--blue)" }}>
