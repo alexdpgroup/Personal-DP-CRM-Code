@@ -2230,6 +2230,34 @@ function PortfolioPage({ fundDefs }) {
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
+  // Realized vs Unrealized calculations
+  const realizedGain = schedule.reduce((total, comp) => {
+    if (!comp.exited) return total;
+    const compInv = comp.financings.reduce((s, f) => {
+      if (f.asset === "Warrants" && f.converted === false) return s;
+      return s + f.invested;
+    }, 0);
+    let syncedFMV = 0;
+    if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
+      syncedFMV = comp.manualFMV;
+    } else if (comp.financings.length > 0) {
+      const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
+      syncedFMV = sortedByDate[0]?.costPerShare || 0;
+    }
+    const compVal = comp.financings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+      return s + (shares * fmv);
+    }, 0);
+    return total + (compVal - compInv);
+  }, 0);
+  const unrealizedGain = totalGainLoss - realizedGain;
+  const dpi = totalInvested > 0 ? ((totalInvested + realizedGain) / totalInvested).toFixed(2) : "—";
+
   const updateFinancing = async (compIdx, finIdx, field, val) => {
     const comp = schedule[compIdx];
     const fin = comp.financings[finIdx];
@@ -2528,7 +2556,9 @@ function PortfolioPage({ fundDefs }) {
         <StatCard label="Total Invested" value={fmtMoney(totalInvested, true)} sub={`${schedule.length} companies`} />
         <StatCard label="Portfolio Value" value={fmtMoney(totalValue, true)} sub="Current marks" gold />
         <StatCard label="Blended MOIC" value={`${blendedMOIC}x`} sub="Multiple on invested capital" />
-        <StatCard label="Unrealized Gain" value={fmtMoney(totalGainLoss, true)} sub={totalGainLoss >= 0 ? "Gain" : "Loss"} />
+        <StatCard label="DPI" value={`${dpi}x`} sub="Distributions to paid-in" />
+        <StatCard label="Realized Gain" value={fmtMoney(realizedGain, true)} sub={realizedGain >= 0 ? "Gain" : "Loss"} />
+        <StatCard label="Unrealized Gain" value={fmtMoney(unrealizedGain, true)} sub={unrealizedGain >= 0 ? "Gain" : "Loss"} />
       </div>
 
       <div className="card">
@@ -4537,6 +4567,28 @@ function FundPortfolioTab({ portfolio, fundName }) {
   const totalGainLoss = totalValue - totalInvested;
   const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
+  // Realized vs Unrealized calculations for this fund
+  const realizedGain = fundPortfolio.reduce((total, comp) => {
+    if (!comp.exited) return total;
+    const compInv = comp.financings.reduce((s, f) => {
+      if (f.asset === "Warrants" && f.converted === false) return s;
+      return s + f.invested;
+    }, 0);
+    const syncedFMV = getCompanySyncedFMV(comp);
+    const compVal = comp.financings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+      return s + (shares * fmv);
+    }, 0);
+    return total + (compVal - compInv);
+  }, 0);
+  const unrealizedGain = totalGainLoss - realizedGain;
+  const dpi = totalInvested > 0 ? ((totalInvested + realizedGain) / totalInvested).toFixed(2) : "—";
+
   if (fundPortfolio.length === 0) {
     return (
       <div className="card">
@@ -4560,7 +4612,9 @@ function FundPortfolioTab({ portfolio, fundName }) {
         <StatCard label="Total Invested" value={fmtMoney(totalInvested, true)} sub={`${fundPortfolio.length} companies`} />
         <StatCard label="Portfolio Value" value={fmtMoney(totalValue, true)} sub="Current marks" gold />
         <StatCard label="Blended MOIC" value={`${blendedMOIC}x`} sub="Multiple on invested capital" />
-        <StatCard label="Unrealized Gain" value={fmtMoney(totalGainLoss, true)} sub={totalGainLoss >= 0 ? "Gain" : "Loss"} />
+        <StatCard label="DPI" value={`${dpi}x`} sub="Distributions to paid-in" />
+        <StatCard label="Realized Gain" value={fmtMoney(realizedGain, true)} sub={realizedGain >= 0 ? "Gain" : "Loss"} />
+        <StatCard label="Unrealized Gain" value={fmtMoney(unrealizedGain, true)} sub={unrealizedGain >= 0 ? "Gain" : "Loss"} />
       </div>
 
       {/* Portfolio Table */}
