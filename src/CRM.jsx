@@ -638,7 +638,13 @@ export default function CRM({ session, onLogout }) {
     if (!window.confirm(`Are you sure you want to delete "${fund.name}"? This cannot be undone.`)) return;
     try {
       if (fund.id) {
-        await supabase.from('funds').delete().eq('id', fund.id);
+        // Delete related lp_commitments that reference this fund by name
+        await supabase.from('lp_commitments').delete().eq('fund_name', fund.name);
+        // Delete related investment records (lps tied to this fund)
+        await supabase.from('lps').delete().eq('fund_id', fund.id);
+        // Delete the fund itself
+        const { error } = await supabase.from('funds').delete().eq('id', fund.id);
+        if (error) throw error;
       }
       setFundDefs(prev => (prev || []).filter(f => f.name !== fund.name));
       if (activeFund === fund.name) { setPage("dashboard"); setActiveFund(null); }
