@@ -400,6 +400,7 @@ const Icon = ({ name, size = 16 }) => {
     logout: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
     dash: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>,
     fund: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+    check: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>,
     download: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
     settings: <svg width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>,
   };
@@ -2150,6 +2151,7 @@ function PortfolioPage({ fundDefs }) {
         sector: comp.sector,
         fund: comp.fund_name || '',
         manualFMV: comp.manual_fmv,
+        exited: comp.exited || false,
         financings: (financings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
@@ -2337,6 +2339,24 @@ function PortfolioPage({ fundDefs }) {
     }
   };
 
+  const updateCompanyExited = async (compIdx, exited) => {
+    const company = schedule[compIdx];
+    try {
+      if (company.companyId) {
+        const { error } = await supabase
+          .from('portfolio_companies')
+          .update({ exited })
+          .eq('id', company.companyId);
+        if (error) throw error;
+      }
+      const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, exited });
+      setSchedule(updated);
+    } catch (error) {
+      console.error('❌ Error updating exited status:', error);
+      alert('Error updating exited status');
+    }
+  };
+
   const updateCompany = async (compIdx, updates) => {
       const company = schedule[compIdx];
       try {
@@ -2345,7 +2365,8 @@ function PortfolioPage({ fundDefs }) {
             .from('portfolio_companies')
             .update({
               company_name: updates.company,
-              sector: updates.sector
+              sector: updates.sector,
+              exited: updates.exited || false
             })
             .eq('id', company.companyId);
           if (error) throw error;
@@ -2353,7 +2374,8 @@ function PortfolioPage({ fundDefs }) {
         const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
           ...c,
           company: updates.company,
-          sector: updates.sector
+          sector: updates.sector,
+          exited: updates.exited || false
         });
         setSchedule(updated);
         setEditCompanyIdx(null);
@@ -2587,7 +2609,10 @@ function PortfolioPage({ fundDefs }) {
                           transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
                         }}>▶</span>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{comp.company}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {comp.company}
+                            {comp.exited && <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Exited</span>}
+                          </div>
                           <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
                         </div>
                       </div>
@@ -2623,12 +2648,17 @@ function PortfolioPage({ fundDefs }) {
                       </div>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
+                      <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>
+                        {comp.exited ? `${compMOIC}x DPI` : `${compMOIC}x`}
+                      </span>
                     </td>
                     <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-ghost btn-sm" onClick={() => setEditCompanyIdx(compIdx)} title="Edit company">
                           <Icon name="edit" size={12} />
+                        </button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => updateCompanyExited(compIdx, !comp.exited)} title={comp.exited ? "Mark as active" : "Mark as exited"} style={{ color: comp.exited ? 'var(--green)' : 'var(--ink-muted)' }}>
+                          <Icon name="check" size={12} />
                         </button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
                           <Icon name="plus" size={12} />
@@ -3065,7 +3095,7 @@ function AddCompanyModal({ onClose, onSave }) {
 }
 
 function EditCompanyModal({ company, onClose, onSave }) {
-  const [form, setForm] = useState({ company: company.company, sector: company.sector || "" });
+  const [form, setForm] = useState({ company: company.company, sector: company.sector || "", exited: company.exited || false });
   const f = k => e => setForm({ ...form, [k]: e.target.value });
   return (
     <div className="overlay" onClick={onClose}>
@@ -3078,6 +3108,13 @@ function EditCompanyModal({ company, onClose, onSave }) {
           <div className="form-grid">
             <div className="field span2"><label>Company Name</label><input value={form.company} onChange={f("company")} placeholder="Acme Corp" /></div>
             <div className="field span2"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
+            <div className="field span2">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                <input type="checkbox" checked={form.exited} onChange={e => setForm({ ...form, exited: e.target.checked })} />
+                Mark as Exited
+              </label>
+              <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 4 }}>Exited companies display DPI instead of MOIC</div>
+            </div>
           </div>
         </div>
         <div className="drawer-footer">
@@ -4041,6 +4078,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
         companyId: comp.id,
         sector: comp.sector,
         manualFMV: comp.manual_fmv,
+        exited: comp.exited || false,
         financings: (financings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
@@ -4581,7 +4619,10 @@ function FundPortfolioTab({ portfolio, fundName }) {
                           transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
                         }}>▶</span>
                         <div>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{comp.company}</div>
+                          <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {comp.company}
+                            {comp.exited && <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Exited</span>}
+                          </div>
                           <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
                         </div>
                       </div>
@@ -4599,7 +4640,9 @@ function FundPortfolioTab({ portfolio, fundName }) {
                       </span>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>{compMOIC}x</span>
+                      <span className={`stat-badge ${+compMOIC >= 2 ? "badge-green" : +compMOIC >= 1 ? "badge-gold" : "badge-red"}`}>
+                        {comp.exited ? `${compMOIC}x DPI` : `${compMOIC}x`}
+                      </span>
                     </td>
                   </tr>,
 
