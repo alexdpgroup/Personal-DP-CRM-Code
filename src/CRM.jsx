@@ -919,11 +919,11 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
 
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-header">
-          <span className="card-title">All Funds — Fundraising Overview</span>
+          <span className="card-title">Actively Raising Funds</span>
           <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>Click any fund to open its full dashboard</span>
         </div>
         <div className="card-body" style={{ padding: "18px 22px", display: "flex", flexDirection: "column", gap: 20 }}>
-          {funds.map(fd => {
+          {funds.filter(fd => fd.status === "raising").map(fd => {
             const fundLPs = safeLps.filter(l =>
               l.fund === fd.name ||
               (l.commitments && l.commitments.some(c => c.fund === fd.name))
@@ -996,6 +996,7 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
               </div>
             );
           })}
+          {funds.filter(fd => fd.status === "raising").length === 0 && <div className="empty">No funds currently raising.</div>}
         </div>
       </div>
     </div>
