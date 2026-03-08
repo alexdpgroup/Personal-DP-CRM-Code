@@ -2231,7 +2231,7 @@ function PortfolioPage({ fundDefs }) {
   const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
   // Realized vs Unrealized calculations
-  const realizedGain = schedule.reduce((total, comp) => {
+  const realizedTotals = schedule.reduce((total, comp) => {
     if (!comp.exited) return total;
     const compInv = comp.financings.reduce((s, f) => {
       if (f.asset === "Warrants" && f.converted === false) return s;
@@ -2253,10 +2253,12 @@ function PortfolioPage({ fundDefs }) {
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
-    return total + (compVal - compInv);
-  }, 0);
+    return { gain: total.gain + (compVal - compInv), value: total.value + compVal };
+  }, { gain: 0, value: 0 });
+  const realizedGain = realizedTotals.gain;
+  const realizedValue = realizedTotals.value;
   const unrealizedGain = totalGainLoss - realizedGain;
-  const dpi = totalInvested > 0 ? ((totalInvested + realizedGain) / totalInvested).toFixed(2) : "—";
+  const dpi = totalInvested > 0 ? (realizedValue / totalInvested).toFixed(2) : "—";
 
   const updateFinancing = async (compIdx, finIdx, field, val) => {
     const comp = schedule[compIdx];
@@ -4568,7 +4570,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
   const blendedMOIC = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
   // Realized vs Unrealized calculations for this fund
-  const realizedGain = fundPortfolio.reduce((total, comp) => {
+  const realizedTotals = fundPortfolio.reduce((total, comp) => {
     if (!comp.exited) return total;
     const compInv = comp.financings.reduce((s, f) => {
       if (f.asset === "Warrants" && f.converted === false) return s;
@@ -4584,10 +4586,12 @@ function FundPortfolioTab({ portfolio, fundName }) {
       const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
       return s + (shares * fmv);
     }, 0);
-    return total + (compVal - compInv);
-  }, 0);
+    return { gain: total.gain + (compVal - compInv), value: total.value + compVal };
+  }, { gain: 0, value: 0 });
+  const realizedGain = realizedTotals.gain;
+  const realizedValue = realizedTotals.value;
   const unrealizedGain = totalGainLoss - realizedGain;
-  const dpi = totalInvested > 0 ? ((totalInvested + realizedGain) / totalInvested).toFixed(2) : "—";
+  const dpi = totalInvested > 0 ? (realizedValue / totalInvested).toFixed(2) : "—";
 
   if (fundPortfolio.length === 0) {
     return (
