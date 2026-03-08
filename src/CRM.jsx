@@ -353,8 +353,9 @@ function computeFundPortfolioValue(portfolioCompanies, fundName) {
   }, 0);
 }
 
-// Compute realized gain for exited companies in a given fund
-function computeFundRealizedGain(portfolioCompanies, fundName) {
+// Compute realized data for exited companies in a given fund
+// Returns { totalGain, exits: [{ company, exitDate, invested, value, gain, moic }] }
+function computeFundRealizedData(portfolioCompanies, fundName) {
   const fundComps = portfolioCompanies
     .map(comp => ({
       ...comp,
@@ -363,7 +364,7 @@ function computeFundRealizedGain(portfolioCompanies, fundName) {
     }))
     .filter(comp => comp.fundFinancings.length > 0 && comp.exited);
 
-  return fundComps.reduce((total, comp) => {
+  const exits = fundComps.map(comp => {
     const getCompanySyncedFMV = (c) => {
       if (c.manualFMV !== undefined && c.manualFMV !== null) return c.manualFMV;
       if (c.allFinancings.length > 0) {
@@ -386,8 +387,20 @@ function computeFundRealizedGain(portfolioCompanies, fundName) {
       if (f.asset === "Warrants" && f.converted === false) return s;
       return s + f.invested;
     }, 0);
-    return total + (compValue - compInvested);
-  }, 0);
+    return {
+      company: comp.companyName,
+      exitDate: comp.exitDate || null,
+      invested: compInvested,
+      value: compValue,
+      gain: compValue - compInvested,
+      moic: compInvested > 0 ? compValue / compInvested : 0,
+    };
+  });
+
+  return {
+    totalGain: exits.reduce((s, e) => s + e.gain, 0),
+    exits,
+  };
 }
 
 const PORTFOLIO = []; // Removed seed data - will load from funds
@@ -553,8 +566,10 @@ export default function CRM({ session, onLogout }) {
 
       // Build portfolio in same format as FundPage for shared computation
       const portfolioForNAV = (portfolioCompanies || []).map(comp => ({
+        companyName: comp.company_name,
         manualFMV: comp.manual_fmv,
         exited: comp.exited || false,
+        exitDate: comp.exit_date || null,
         financings: (portfolioFinancings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
@@ -573,15 +588,17 @@ export default function CRM({ session, onLogout }) {
       const navDataMap = {};
       const allFundNames = [...new Set((portfolioFinancings || []).map(f => f.fund).filter(Boolean))];
       for (const fundName of allFundNames) {
+        const realizedData = computeFundRealizedData(portfolioForNAV, fundName);
         navDataMap[fundName] = {
           portfolioValue: computeFundPortfolioValue(portfolioForNAV, fundName),
-          realizedGain: computeFundRealizedGain(portfolioForNAV, fundName),
+          realizedGain: realizedData.totalGain,
+          exits: realizedData.exits,
           target: 0,
         };
       }
       for (const f of (funds || [])) {
         if (!navDataMap[f.name]) {
-          navDataMap[f.name] = { portfolioValue: 0, realizedGain: 0, target: f.target_amount || 0 };
+          navDataMap[f.name] = { portfolioValue: 0, realizedGain: 0, exits: [], target: f.target_amount || 0 };
         } else {
           navDataMap[f.name].target = f.target_amount || 0;
         }
@@ -3940,6 +3957,24 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
     const lpPct = (c.commitment || 0) / fundData.target;
     return s + lpPct * (fundData.realizedGain || 0);
   }, 0);
+  // Build per-exit distribution rows for this LP
+  const exitDistributions = commitments.flatMap(c => {
+    const fundData = moics[c.fund];
+    if (!fundData || !fundData.target || fundData.target <= 0 || !fundData.exits) return [];
+    const lpPct = (c.commitment || 0) / fundData.target;
+    return fundData.exits.map(exit => ({
+      company: exit.company,
+      exitDate: exit.exitDate,
+      dpi: exit.invested > 0 ? (exit.value / exit.invested).toFixed(2) : "—",
+      distribution: lpPct * exit.gain,
+      fund: c.fund,
+    }));
+  }).sort((a, b) => {
+    if (!a.exitDate) return 1;
+    if (!b.exitDate) return -1;
+    return new Date(b.exitDate) - new Date(a.exitDate);
+  });
+
   const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
   const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? funds.join(", ") : lp.fund || "—";
   const fundPortfolio = PORTFOLIO.filter(p => funds.includes(p.fund));
@@ -4013,15 +4048,28 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
           {/* Distributions */}
           <div className="portal-card">
             <h3>Distribution History</h3>
-            {(lp.distributions || []).length === 0
-              ? <div className="text-muted" style={{ padding: "20px 0" }}>No distributions have been made yet.</div>
-              : (lp.distributions || []).map((d, i) => (
-                  <div key={i} className="dist-row">
-                    <span style={{ fontSize: 13 }}>{d.date}</span>
-                    <span className="stat-badge badge-green">{d.type}</span>
-                    <span style={{ fontWeight: 600, color: "var(--green)" }}>{fmtMoney(d.amount)}</span>
-                  </div>
-                ))
+            {exitDistributions.length === 0
+              ? <div className="text-muted" style={{ padding: "20px 0" }}>No distributions from exits yet.</div>
+              : <table style={{ width: '100%', fontSize: 13 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ textAlign: 'left' }}>Exit Date</th>
+                      <th style={{ textAlign: 'left' }}>Company</th>
+                      <th style={{ textAlign: 'right' }}>DPI</th>
+                      <th style={{ textAlign: 'right' }}>Distribution</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exitDistributions.map((d, i) => (
+                      <tr key={i}>
+                        <td>{d.exitDate ? new Date(d.exitDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                        <td style={{ fontWeight: 500 }}>{d.company}</td>
+                        <td style={{ textAlign: 'right' }}><span className={`stat-badge ${+d.dpi >= 2 ? 'badge-green' : +d.dpi >= 1 ? 'badge-gold' : 'badge-red'}`}>{d.dpi}x</span></td>
+                        <td style={{ textAlign: 'right', fontWeight: 600, color: d.distribution >= 0 ? 'var(--green)' : 'var(--red)' }}>{d.distribution >= 0 ? '+' : ''}{fmtMoney(d.distribution)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
             }
           </div>
         </div>
