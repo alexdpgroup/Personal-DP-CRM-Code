@@ -353,6 +353,43 @@ function computeFundPortfolioValue(portfolioCompanies, fundName) {
   }, 0);
 }
 
+// Compute realized gain for exited companies in a given fund
+function computeFundRealizedGain(portfolioCompanies, fundName) {
+  const fundComps = portfolioCompanies
+    .map(comp => ({
+      ...comp,
+      allFinancings: comp.financings,
+      fundFinancings: comp.financings.filter(f => f.fund === fundName)
+    }))
+    .filter(comp => comp.fundFinancings.length > 0 && comp.exited);
+
+  return fundComps.reduce((total, comp) => {
+    const getCompanySyncedFMV = (c) => {
+      if (c.manualFMV !== undefined && c.manualFMV !== null) return c.manualFMV;
+      if (c.allFinancings.length > 0) {
+        const sorted = [...c.allFinancings].sort((a, b) => new Date(b.date) - new Date(a.date));
+        return sorted[0]?.costPerShare || 0;
+      }
+      return 0;
+    };
+    const syncedFMV = getCompanySyncedFMV(comp);
+    const compValue = comp.fundFinancings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+      return s + (shares * fmv);
+    }, 0);
+    const compInvested = comp.fundFinancings.reduce((s, f) => {
+      if (f.asset === "Warrants" && f.converted === false) return s;
+      return s + f.invested;
+    }, 0);
+    return total + (compValue - compInvested);
+  }, 0);
+}
+
 const PORTFOLIO = []; // Removed seed data - will load from funds
 
 function fmtMoney(n, short = false) {
@@ -517,6 +554,7 @@ export default function CRM({ session, onLogout }) {
       // Build portfolio in same format as FundPage for shared computation
       const portfolioForNAV = (portfolioCompanies || []).map(comp => ({
         manualFMV: comp.manual_fmv,
+        exited: comp.exited || false,
         financings: (portfolioFinancings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
@@ -537,12 +575,13 @@ export default function CRM({ session, onLogout }) {
       for (const fundName of allFundNames) {
         navDataMap[fundName] = {
           portfolioValue: computeFundPortfolioValue(portfolioForNAV, fundName),
+          realizedGain: computeFundRealizedGain(portfolioForNAV, fundName),
           target: 0,
         };
       }
       for (const f of (funds || [])) {
         if (!navDataMap[f.name]) {
-          navDataMap[f.name] = { portfolioValue: 0, target: f.target_amount || 0 };
+          navDataMap[f.name] = { portfolioValue: 0, realizedGain: 0, target: f.target_amount || 0 };
         } else {
           navDataMap[f.name].target = f.target_amount || 0;
         }
@@ -3895,7 +3934,12 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
   const totalNAV = commitments.reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, moics), 0);
   const totalReturn = totalNAV - totalFunded;
   const returnPct = totalFunded > 0 ? ((totalNAV / totalFunded - 1) * 100).toFixed(1) : 0;
-  const totalDistributions = (lp.distributions || []).reduce((s, d) => s + d.amount, 0);
+  const totalDistributions = commitments.reduce((s, c) => {
+    const fundData = moics[c.fund];
+    if (!fundData || !fundData.target || fundData.target <= 0) return s;
+    const lpPct = (c.commitment || 0) / fundData.target;
+    return s + lpPct * (fundData.realizedGain || 0);
+  }, 0);
   const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
   const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? funds.join(", ") : lp.fund || "—";
   const fundPortfolio = PORTFOLIO.filter(p => funds.includes(p.fund));
@@ -3949,7 +3993,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
           <div className="portal-card" style={{ borderTop: "3px solid var(--blue)" }}>
             <h3>Total Distributions</h3>
             <div className="portal-big-num" style={{ color: "var(--blue)" }}>{fmtMoney(totalDistributions)}</div>
-            <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{(lp.distributions || []).length} distribution{(lp.distributions || []).length !== 1 ? "s" : ""} received</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>From realized exits</div>
           </div>
         </div>
 
