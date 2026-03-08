@@ -892,10 +892,7 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
     if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
     return s + (l.funded || 0);
   }, 0);
-  const totalNAV = safeLps.reduce((s, l) => {
-    if (l.commitments && l.commitments.length > 0) return s + l.commitments.filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
-    return s;
-  }, 0);
+  const totalPortfolioValue = Object.values(fundMOICs || {}).reduce((s, d) => s + (d.portfolioValue || 0), 0);
   const pipelineCount = safeLps.filter(l => getLPStage(l) !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
 
@@ -904,17 +901,8 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
       <div className="stats-row">
         <StatCard label="Total LP Commitments" value={fmtMoney(totalCommit, true)} sub={`${closed.length} closed LPs`} />
         <StatCard label="Capital Deployed" value={fmtMoney(totalFunded, true)} sub={`${Math.round((totalFunded / totalCommit) * 100) || 0}% of commitments`} gold />
-        <StatCard label="Portfolio NAV" value={fmtMoney(totalNAV, true)} sub="Marked to current" />
+        <StatCard label="Portfolio Value" value={fmtMoney(totalPortfolioValue, true)} sub="Current marks" gold />
         <StatCard label="Pipeline LPs" value={pipelineCount} sub="Active prospects" />
-      </div>
-
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-header">
-          <span className="card-title">Recent Activity</span>
-        </div>
-        <div className="card-body">
-          <div className="text-muted" style={{ padding: "18px", textAlign: "center" }}>No recent activity.</div>
-        </div>
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
