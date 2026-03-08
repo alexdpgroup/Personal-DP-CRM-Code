@@ -2115,6 +2115,7 @@ function PortfolioPage({ fundDefs }) {
   const [editingCell, setEditingCell] = useState(null); // {compIdx, finIdx, field}
   const [editCompanyIdx, setEditCompanyIdx] = useState(null); // index into schedule for editing company
   const [editFinancing, setEditFinancing] = useState(null); // {compIdx, finIdx} for editing financing
+  const [exitDatePrompt, setExitDatePrompt] = useState(null); // { compIdx } for exit date input
 
   // Get fund names from fundDefs, or fall back to FUNDS constant
   const fundNames = fundDefs?.map(f => f.name) || FUNDS;
@@ -2152,6 +2153,7 @@ function PortfolioPage({ fundDefs }) {
         fund: comp.fund_name || '',
         manualFMV: comp.manual_fmv,
         exited: comp.exited || false,
+        exitDate: comp.exit_date || null,
         financings: (financings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
@@ -2369,18 +2371,17 @@ function PortfolioPage({ fundDefs }) {
     }
   };
 
-  const updateCompanyExited = async (compIdx, exited) => {
+  const updateCompanyExited = async (compIdx, exited, exitDate = null) => {
     const company = schedule[compIdx];
-    // Update local state immediately
-    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, exited });
+    const updated = schedule.map((c, ci) => ci !== compIdx ? c : { ...c, exited, exitDate: exited ? exitDate : null });
     setSchedule(updated);
     try {
       if (company.companyId) {
         const { error } = await supabase
           .from('portfolio_companies')
-          .update({ exited })
+          .update({ exited, exit_date: exited ? exitDate : null })
           .eq('id', company.companyId);
-        if (error) console.warn('Could not persist exited status (column may not exist yet):', error.message);
+        if (error) console.warn('Could not persist exited status:', error.message);
       }
     } catch (error) {
       console.warn('Could not persist exited status:', error);
@@ -2396,27 +2397,18 @@ function PortfolioPage({ fundDefs }) {
             .update({
               company_name: updates.company,
               sector: updates.sector,
-              exited: updates.exited || false
+              exited: updates.exited || false,
+              exit_date: updates.exited ? (updates.exitDate || null) : null
             })
             .eq('id', company.companyId);
-          // If exited column doesn't exist yet, retry without it
-          if (error) {
-            const retry = await supabase
-              .from('portfolio_companies')
-              .update({
-                company_name: updates.company,
-                sector: updates.sector
-              })
-              .eq('id', company.companyId);
-            if (retry.error) throw retry.error;
-            console.warn('Saved company without exited field (column may not exist yet)');
-          }
+          if (error) throw error;
         }
         const updated = schedule.map((c, ci) => ci !== compIdx ? c : {
           ...c,
           company: updates.company,
           sector: updates.sector,
-          exited: updates.exited || false
+          exited: updates.exited || false,
+          exitDate: updates.exited ? (updates.exitDate || null) : null
         });
         setSchedule(updated);
         setEditCompanyIdx(null);
@@ -2654,7 +2646,7 @@ function PortfolioPage({ fundDefs }) {
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
                             {comp.company}
-                            {comp.exited && <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Exited</span>}
+                            {comp.exited && <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Exited{comp.exitDate ? ` ${new Date(comp.exitDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}</span>}
                           </div>
                           <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
                         </div>
@@ -2700,7 +2692,7 @@ function PortfolioPage({ fundDefs }) {
                         <button className="btn btn-ghost btn-sm" onClick={() => setEditCompanyIdx(compIdx)} title="Edit company">
                           <Icon name="edit" size={12} />
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => updateCompanyExited(compIdx, !comp.exited)} title={comp.exited ? "Mark as active" : "Mark as exited"} style={{ color: comp.exited ? 'var(--green)' : 'var(--ink-muted)' }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => comp.exited ? updateCompanyExited(compIdx, false) : setExitDatePrompt({ compIdx })} title={comp.exited ? "Mark as active" : "Mark as exited"} style={{ color: comp.exited ? 'var(--green)' : 'var(--ink-muted)' }}>
                           <Icon name="check" size={12} />
                         </button>
                         <button className="btn btn-ghost btn-sm" onClick={() => setAddFinancingFor(compIdx)} title="Add financing round">
@@ -2902,6 +2894,16 @@ function PortfolioPage({ fundDefs }) {
           fundNames={fundNames}
           onClose={() => setEditFinancing(null)}
           onSave={(updates) => updateFinancingFull(editFinancing.compIdx, editFinancing.finIdx, updates)}
+        />
+      )}
+      {exitDatePrompt !== null && (
+        <ExitDateModal
+          company={schedule[exitDatePrompt.compIdx]?.company}
+          onClose={() => setExitDatePrompt(null)}
+          onSave={(exitDate) => {
+            updateCompanyExited(exitDatePrompt.compIdx, true, exitDate);
+            setExitDatePrompt(null);
+          }}
         />
       )}
     </div>
@@ -3138,7 +3140,7 @@ function AddCompanyModal({ onClose, onSave }) {
 }
 
 function EditCompanyModal({ company, onClose, onSave }) {
-  const [form, setForm] = useState({ company: company.company, sector: company.sector || "", exited: company.exited || false });
+  const [form, setForm] = useState({ company: company.company, sector: company.sector || "", exited: company.exited || false, exitDate: company.exitDate || "" });
   const f = k => e => setForm({ ...form, [k]: e.target.value });
   return (
     <div className="overlay" onClick={onClose}>
@@ -3153,16 +3155,44 @@ function EditCompanyModal({ company, onClose, onSave }) {
             <div className="field span2"><label>Sector</label><input value={form.sector} onChange={f("sector")} placeholder="AI/ML" /></div>
             <div className="field span2">
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <input type="checkbox" checked={form.exited} onChange={e => setForm({ ...form, exited: e.target.checked })} />
+                <input type="checkbox" checked={form.exited} onChange={e => setForm({ ...form, exited: e.target.checked, exitDate: e.target.checked ? form.exitDate : "" })} />
                 Mark as Exited
               </label>
               <div style={{ fontSize: 11, color: 'var(--ink-muted)', marginTop: 4 }}>Exited companies display DPI instead of MOIC</div>
             </div>
+            {form.exited && (
+              <div className="field span2"><label>Exit Date</label><input type="date" value={form.exitDate} onChange={f("exitDate")} /></div>
+            )}
           </div>
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={() => { if (form.company) onSave(form); }}>Save Changes</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ExitDateModal({ company, onClose, onSave }) {
+  const [exitDate, setExitDate] = useState(new Date().toISOString().split('T')[0]);
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Mark as Exited</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <p style={{ fontSize: 13, marginBottom: 16 }}>Mark <strong>{company}</strong> as exited?</p>
+          <div className="field">
+            <label>Exit Date</label>
+            <input type="date" value={exitDate} onChange={e => setExitDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => onSave(exitDate)}>Confirm Exit</button>
         </div>
       </div>
     </div>
@@ -4122,6 +4152,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
         sector: comp.sector,
         manualFMV: comp.manual_fmv,
         exited: comp.exited || false,
+        exitDate: comp.exit_date || null,
         financings: (financings || [])
           .filter(f => f.company_id === comp.id)
           .map(f => ({
@@ -4690,7 +4721,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
                         <div>
                           <div style={{ fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
                             {comp.company}
-                            {comp.exited && <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Exited</span>}
+                            {comp.exited && <span style={{ fontSize: 9, background: '#e8f5e9', color: '#2e7d32', borderRadius: 4, padding: '1px 6px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>Exited{comp.exitDate ? ` ${new Date(comp.exitDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}` : ''}</span>}
                           </div>
                           <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{comp.financings.length} financing{comp.financings.length !== 1 ? "s" : ""}</div>
                         </div>
