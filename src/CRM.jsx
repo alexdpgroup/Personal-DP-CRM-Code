@@ -2655,7 +2655,7 @@ function PortfolioPage({ fundDefs, lps, fundMOICs }) {
         <StatCard label="DPI" value={`${dpi}x`} sub="Distributions to paid-in" />
         <StatCard label="Realized Gain" value={fmtMoney(realizedGain, true)} sub={realizedGain >= 0 ? "Gain" : "Loss"} />
         <StatCard label="Unrealized Gain" value={fmtMoney(unrealizedGain, true)} sub={unrealizedGain >= 0 ? "Gain" : "Loss"} />
-        <StatCard label="Remaining to Call" value={fmtMoney(lpTotalCommitment - lpTotalFunded, true)} sub="Unfunded commitments" />
+        <StatCard label="Remaining to Call" value={fmtMoney(lpTotalCommitment - lpTotalFunded, true)} />
         <StatCard label="Unfunded" value={fmtMoney(lpTotalCalled - lpTotalFunded, true)} sub="Unfunded called capital" />
       </div>
 
@@ -4450,7 +4450,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
             { label: "Closed LPs",   val: closedInvestments.length },
             { label: "In Pipeline",  val: pipelineInvestments.length },
             { label: portfolioValue > 0 ? "Portfolio Value" : "Remaining", val: portfolioValue > 0 ? fmtMoney(portfolioValue, true) : fmtMoney(Math.max(fd.target - committed, 0), true) },
-            { label: "Remaining to Call", val: fmtMoney(committed - funded, true), sub: "Unfunded commitments" },
+            { label: "Remaining to Call", val: fmtMoney(committed - funded, true) },
             { label: "Unfunded", val: fmtMoney(called - funded, true), sub: "Unfunded called capital" },
           ].map(item => (
             <div key={item.label} style={{ background: "var(--surface)", borderRadius: 8, padding: "12px 14px" }}>
