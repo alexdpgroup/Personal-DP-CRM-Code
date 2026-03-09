@@ -1110,6 +1110,7 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
   const [selected, setSelected] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [expanded, setExpanded] = useState({});
+  const [sortBy, setSortBy] = useState("firm"); // "firm" | "commitment"
   const [addCommitmentFor, setAddCommitmentFor] = useState(null); // lp index
   const [editCommitment, setEditCommitment] = useState(null); // { lpIdx, commitIdx }
 
@@ -1136,7 +1137,14 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
     const matchPartner = filterPartner === "all" || lp.partner === filterPartner;
     const matchFund = filterFund === "all" || (lp.commitments || []).some(c => c.fund === filterFund);
     return matchQ && matchPartner && matchFund;
-  }).sort((a, b) => (a.firm || '').localeCompare(b.firm || ''));
+  }).sort((a, b) => {
+    if (sortBy === "commitment") {
+      const aTotal = (a.commitments || []).reduce((s, c) => s + (c.commitment || 0), 0);
+      const bTotal = (b.commitments || []).reduce((s, c) => s + (c.commitment || 0), 0);
+      return bTotal - aTotal;
+    }
+    return (a.firm || '').localeCompare(b.firm || '');
+  });
 
   // Totals
   const totalCommitment = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
@@ -1300,6 +1308,10 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
         <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
           <option value="all">All Partners</option>
           {(partners || PARTNERS).map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <option value="firm">Sort: Firm A–Z</option>
+          <option value="commitment">Sort: Commitment ↓</option>
         </select>
         <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
           <Icon name="plus" size={14} /> Add LP
@@ -3930,11 +3942,19 @@ Send them the portal URL and their credentials. They'll only see their own inves
 // ── PORTAL PICKER (for internal preview) ──────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 function PortalPickerPage({ lps, fundMOICs, onSelect }) {
+  const [sortBy, setSortBy] = useState("firm"); // "firm" | "commitment"
   const moics = fundMOICs || {};
   const eligible = lps.filter(l => {
     const closedCommitments = (l.commitments || []).filter(c => c.stage === 'closed');
     const totalCommit = closedCommitments.reduce((s, c) => s + (c.commitment || 0), 0);
     return closedCommitments.length > 0 && totalCommit > 0;
+  }).sort((a, b) => {
+    if (sortBy === "commitment") {
+      const aTotal = (a.commitments || []).filter(c => c.stage === 'closed').reduce((s, c) => s + (c.commitment || 0), 0);
+      const bTotal = (b.commitments || []).filter(c => c.stage === 'closed').reduce((s, c) => s + (c.commitment || 0), 0);
+      return bTotal - aTotal;
+    }
+    return (a.firm || '').localeCompare(b.firm || '');
   });
 
   return (
@@ -3943,7 +3963,13 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
         <b>Preview Mode:</b> Select an LP below to see exactly what they would see on their investor portal. In production, each LP would receive a secure login link.
       </div>
       <div className="card">
-        <div className="card-header"><span className="card-title">Closed LPs — Portal Preview</span></div>
+        <div className="card-header">
+          <span className="card-title">Closed LPs — Portal Preview</span>
+          <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="firm">Sort: Firm A–Z</option>
+            <option value="commitment">Sort: Commitment ↓</option>
+          </select>
+        </div>
         <div className="card-body">
           <table>
             <thead>
@@ -4173,6 +4199,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
   const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
+  const [fundSortBy, setFundSortBy] = useState("firm"); // "firm" | "commitment"
   const [investments, setInvestments] = useState([]);
   const [contacts, setContacts] = useState([]);
   const [portfolio, setPortfolio] = useState([]);
@@ -4346,8 +4373,12 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
     return <div style={{ padding: 40, color: 'var(--ink-muted)' }}>Loading fund data...</div>;
   }
 
-  const closedInvestments = allInvestments.filter(inv => inv.stage === "closed");
-  const pipelineInvestments = allInvestments.filter(inv => inv.stage !== "closed");
+  const sortInv = (list) => [...list].sort((a, b) => {
+    if (fundSortBy === "commitment") return (b.commitment || 0) - (a.commitment || 0);
+    return (a.contact?.firm || a.firm || '').localeCompare(b.contact?.firm || b.firm || '');
+  });
+  const closedInvestments = sortInv(allInvestments.filter(inv => inv.stage === "closed"));
+  const pipelineInvestments = sortInv(allInvestments.filter(inv => inv.stage !== "closed"));
   const committed = allInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
   const closedCommitted = closedInvestments.reduce((s, inv) => s + (inv.commitment || 0), 0);
   const funded = allInvestments.reduce((s, inv) => s + (inv.funded || 0), 0);
@@ -4592,6 +4623,10 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
       <div className="card" style={{ marginTop: 20 }}>
         <div className="card-header">
           <span className="card-title">All LPs — {shortName}</span>
+          <select className="filter-select" value={fundSortBy} onChange={e => setFundSortBy(e.target.value)}>
+            <option value="firm">Sort: Firm A–Z</option>
+            <option value="commitment">Sort: Commitment ↓</option>
+          </select>
         </div>
         <div className="card-body">
           {allInvestments.length === 0
@@ -4609,7 +4644,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
                   </tr>
                 </thead>
                 <tbody>
-                  {allInvestments.map(inv => {
+                  {sortInv(allInvestments).map(inv => {
                     const s = stageInfo(inv.stage);
                     const contactName = inv.contact?.name || inv.name || 'Unknown';
                     const contactFirm = inv.contact?.firm || inv.firm || '';
