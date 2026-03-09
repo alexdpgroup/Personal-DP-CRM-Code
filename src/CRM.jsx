@@ -413,7 +413,7 @@ function fmtMoney(n, short = false) {
     if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
     return `$${n}`;
   }
-  return "$" + n.toLocaleString();
+  return "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function initials(name) {
