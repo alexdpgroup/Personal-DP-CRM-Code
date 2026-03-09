@@ -3986,8 +3986,8 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
                 <tr key={lp.id} onClick={() => onSelect(lp)}>
                   <td>
                     <div className="flex-row">
-                      <div className="avatar">{initials(lp.name)}</div>
-                      <div><div className="td-name">{lp.name}</div><div className="td-sub">{lp.firm}</div></div>
+                      <div className="avatar">{initials(lp.firm || lp.name)}</div>
+                      <div><div className="td-name">{lp.firm || '—'}</div><div className="td-sub">{lp.name}</div></div>
                     </div>
                   </td>
                   <td><span className="tag">{fundDisplay}</span></td>
@@ -4568,10 +4568,10 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
                 return (
                   <div key={inv.id} style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
                     onClick={() => setSelectedLP(inv)}>
-                    <div className="avatar">{initials(contactName)}</div>
+                    <div className="avatar">{initials(contactFirm || contactName)}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactFirm || '—'}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactName}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <span className="stat-badge" style={{ background: s.bg, color: s.color, display: "block", marginBottom: 3 }}>{s.label}</span>
@@ -4600,10 +4600,10 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
                   <div key={inv.id}
                     style={{ display: "flex", gap: 10, padding: "11px 18px", borderBottom: "1px solid var(--border)", alignItems: "center", cursor: "pointer" }}
                     onClick={() => setSelectedLP(inv)}>
-                    <div className="avatar">{initials(contactName)}</div>
+                    <div className="avatar">{initials(contactFirm || contactName)}</div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactName}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactFirm}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13.5 }}>{contactFirm || '—'}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{contactName}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontWeight: 600, color: "var(--gold-dark)", fontSize: 14 }}>{fmtMoney(inv.commitment, true)}</div>
@@ -4652,10 +4652,10 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
                       <tr key={inv.id} onClick={() => setSelectedLP(inv)}>
                         <td>
                           <div className="flex-row">
-                            <div className="avatar">{initials(contactName)}</div>
+                            <div className="avatar">{initials(contactFirm || contactName)}</div>
                             <div>
-                              <div className="td-name">{contactName}</div>
-                              <div className="td-sub">{contactFirm}</div>
+                              <div className="td-name">{contactFirm || '—'}</div>
+                              <div className="td-sub">{contactName}</div>
                             </div>
                           </div>
                         </td>
