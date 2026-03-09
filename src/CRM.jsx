@@ -673,8 +673,8 @@ export default function CRM({ session, onLogout }) {
             phone: lp.phone || '',
           };
           if (lp.stage) updateFields.stage = lp.stage;
-          if (lp.partner !== undefined) updateFields.partner = lp.partner || '';
-          if (lp.tier !== undefined) updateFields.tier = lp.tier || '';
+          if (lp.partner !== undefined) updateFields.partner = lp.partner || null;
+          if (lp.tier !== undefined) updateFields.tier = lp.tier || null;
 
           const { error } = await supabase
             .from('lps')
@@ -702,8 +702,8 @@ export default function CRM({ session, onLogout }) {
           phone: updatedLP.phone || '',
         };
         if (updatedLP.stage) updateFields.stage = updatedLP.stage;
-        if (updatedLP.partner !== undefined) updateFields.partner = updatedLP.partner || '';
-        if (updatedLP.tier !== undefined) updateFields.tier = updatedLP.tier || '';
+        if (updatedLP.partner !== undefined) updateFields.partner = updatedLP.partner || null;
+        if (updatedLP.tier !== undefined) updateFields.tier = updatedLP.tier || null;
 
         const { error } = await supabase
           .from('lps')
