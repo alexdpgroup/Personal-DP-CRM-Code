@@ -1136,7 +1136,7 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
     const matchPartner = filterPartner === "all" || lp.partner === filterPartner;
     const matchFund = filterFund === "all" || (lp.commitments || []).some(c => c.fund === filterFund);
     return matchQ && matchPartner && matchFund;
-  });
+  }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
   // Totals
   const totalCommitment = filteredLPs.reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
