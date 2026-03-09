@@ -687,7 +687,39 @@ export default function CRM({ session, onLogout }) {
       }
     }
   };
-  
+
+  // Save a single LP to Supabase and update local state
+  const saveOneLP = async (updatedLP) => {
+    // Update local state immediately
+    setLPs(prev => (prev || []).map(l => l.id === updatedLP.id ? updatedLP : l));
+    // Persist to Supabase
+    if (updatedLP.id) {
+      try {
+        const updateFields = {
+          name: updatedLP.name || '',
+          firm: updatedLP.firm || '',
+          email: updatedLP.email || '',
+          phone: updatedLP.phone || '',
+        };
+        if (updatedLP.stage) updateFields.stage = updatedLP.stage;
+        if (updatedLP.partner !== undefined) updateFields.partner = updatedLP.partner || '';
+        if (updatedLP.tier !== undefined) updateFields.tier = updatedLP.tier || '';
+
+        const { error } = await supabase
+          .from('lps')
+          .update(updateFields)
+          .eq('id', updatedLP.id);
+        if (error) {
+          console.error('Error saving LP:', updatedLP.id, error);
+          alert('Error saving changes: ' + error.message);
+        }
+      } catch (err) {
+        console.error('Error saving LP:', updatedLP.id, err);
+        alert('Error saving changes. Please try again.');
+      }
+    }
+  };
+
   const goFund = (fundName) => { setActiveFund(fundName); setPage("fund"); };
   const goPage = (p) => { setPage(p); setActiveFund(null); };
 
@@ -918,11 +950,11 @@ export default function CRM({ session, onLogout }) {
 
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
-            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} />}
+            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} />}
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} fundMOICs={fundMOICs} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
-            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} setFundDefs={setFundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} onPortal={setPortalLP} />}
+            {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} setFundDefs={setFundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} />}
           </div>
         </main>
 
@@ -1071,7 +1103,7 @@ function MiniStat({ label, value }) {
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP Directory – Portfolio-style expandable table ──
-function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) {
+function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, partners }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterFund, setFilterFund] = useState("all");
@@ -1444,7 +1476,7 @@ function LPDirectory({ lps, saveLPs, onPortal, fundDefs, fundMOICs, partners }) 
           fundMOICs={fundMOICs}
           partners={partners}
           onClose={() => setSelected(null)}
-          onSave={(updated) => { saveLPs(lps.map(l => l.id === updated.id ? updated : l)); setSelected(updated); }}
+          onSave={(updated) => { saveOneLP(updated); setSelected(updated); }}
           onUpdateCommitment={(commitIdx, updated) => {
             const realIdx = lps.findIndex(l => l.id === selected.id);
             if (realIdx !== -1) updateCommitment(realIdx, commitIdx, updated);
@@ -1570,9 +1602,16 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
 function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateCommitment, onDelete, onPortal }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(lp);
+  const [form, setForm] = useState({ ...lp, name: lp.name || '', firm: lp.firm || '', email: lp.email || '', phone: lp.phone || '', partner: lp.partner || '', tier: lp.tier || '' });
   const [additionalContacts, setAdditionalContacts] = useState([]);
   const [showAddContact, setShowAddContact] = useState(false);
+
+  // Sync form when lp prop changes (e.g., after save updates parent state)
+  useEffect(() => {
+    if (!editing) {
+      setForm({ ...lp, name: lp.name || '', firm: lp.firm || '', email: lp.email || '', phone: lp.phone || '', partner: lp.partner || '', tier: lp.tier || '' });
+    }
+  }, [lp.id, lp.name, lp.firm, lp.email, lp.phone, lp.partner, lp.tier]);
   // Compute totals from commitments
   const commitments = lp.commitments || [];
   const derivedStage = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || "outreach");
@@ -4128,7 +4167,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── FUND PAGE ─────────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, saveLPs, onPortal }) {
+function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, saveLPs, saveOneLP, onPortal }) {
   const [activeTab, setActiveTab] = useState('lps'); // 'lps' or 'portfolio'
   const [selectedLP, setSelectedLP] = useState(null);
   const [showAddLP, setShowAddLP] = useState(false);
@@ -4609,7 +4648,7 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
           partners={partners}
           onClose={() => setSelectedLP(null)}
           onSave={(updated) => {
-            saveLPs(lps.map(l => l.id === updated.id ? updated : l));
+            saveOneLP(updated);
             setSelectedLP(updated);
           }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelectedLP(null); }}
