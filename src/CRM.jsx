@@ -951,7 +951,7 @@ export default function CRM({ session, onLogout }) {
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
             {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} />}
-            {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} lps={lps} fundMOICs={fundMOICs} />}
+            {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} fundMOICs={fundMOICs} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
             {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} setFundDefs={setFundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} />}
@@ -2204,7 +2204,7 @@ function PipelinePage({ lps, saveLPs }) {
 // Seed schedule of investments data — each company has multiple financing rounds
 const SEED_SCHEDULE = []; // Removed seed data
 
-function PortfolioPage({ fundDefs, lps, fundMOICs }) {
+function PortfolioPage({ fundDefs }) {
   const [schedule, setSchedule] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [showAddCompany, setShowAddCompany] = useState(false);
@@ -2641,11 +2641,6 @@ function PortfolioPage({ fundDefs, lps, fundMOICs }) {
     }
   };
 
-  // LP-level totals for remaining to call / unfunded
-  const lpTotalCommitment = (lps || []).reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.commitment || 0), 0), 0);
-  const lpTotalFunded = (lps || []).reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.funded || 0), 0), 0);
-  const lpTotalCalled = (lps || []).reduce((s, lp) => s + (lp.commitments || []).reduce((ss, c) => ss + (c.called || 0), 0), 0);
-
   return (
     <div>
       <div className="stats-row">
@@ -2655,8 +2650,6 @@ function PortfolioPage({ fundDefs, lps, fundMOICs }) {
         <StatCard label="DPI" value={`${dpi}x`} sub="Distributions to paid-in" />
         <StatCard label="Realized Gain" value={fmtMoney(realizedGain, true)} sub={realizedGain >= 0 ? "Gain" : "Loss"} />
         <StatCard label="Unrealized Gain" value={fmtMoney(unrealizedGain, true)} sub={unrealizedGain >= 0 ? "Gain" : "Loss"} />
-        <StatCard label="Remaining to Call" value={fmtMoney(lpTotalCommitment - lpTotalFunded, true)} />
-        <StatCard label="Unfunded" value={fmtMoney(lpTotalCalled - lpTotalFunded, true)} sub="Unfunded called capital" />
       </div>
 
       <div className="card">
