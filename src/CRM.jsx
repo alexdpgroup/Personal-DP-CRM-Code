@@ -4710,7 +4710,8 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
       {showAddLP && (
         <AddLPToFundModal
           fundName={fundName}
-          contacts={contacts}
+          lps={lps}
+          saveLPs={saveLPs}
           onClose={() => setShowAddLP(false)}
           onSave={loadFundData}
         />
@@ -5001,35 +5002,20 @@ function FundPortfolioTab({ portfolio, fundName }) {
 }
 
 // ── Add LP to Fund Modal ──
-function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
-  const [allLPs, setAllLPs] = useState([]);
+function AddLPToFundModal({ fundName, lps, saveLPs, onClose, onSave }) {
   const [selectedLPId, setSelectedLPId] = useState('');
   const [form, setForm] = useState({
     stage: 'outreach',
-    commitment: 0
+    commitment: 0,
+    funded: 0,
+    called: 0,
   });
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadAllLPs();
-  }, []);
-
-  const loadAllLPs = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('lps')
-        .select('*')
-        .is('fund', null) // Only LPs not yet assigned to a fund
-        .order('name');
-
-      if (error) throw error;
-      setAllLPs(data || []);
-    } catch (error) {
-      console.error('Error loading LPs:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Filter to LPs that don't already have a commitment to this fund
+  const availableLPs = (lps || []).filter(lp => {
+    const alreadyHasCommitment = lp.commitments?.some(c => c.fund === fundName);
+    return !alreadyHasCommitment;
+  });
 
   const handleSave = async () => {
     if (!selectedLPId) {
@@ -5038,60 +5024,79 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
     }
 
     try {
-      // Update the LP record with fund assignment
-      const { error } = await supabase
-        .from('lps')
-        .update({
+      // Insert into lp_commitments table (same as LP Directory)
+      const { data: newRow, error } = await supabase
+        .from('lp_commitments')
+        .insert({
+          lp_id: selectedLPId,
           fund: fundName,
-          stage: form.stage,
-          commitment: form.commitment
+          commitment: form.commitment || 0,
+          funded: form.funded || 0,
+          called: form.called || 0,
+          nav: 0,
+          stage: form.stage || 'outreach',
         })
-        .eq('id', selectedLPId);
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Update local lps state so LP Directory reflects the new commitment
+      const newCommitment = {
+        id: newRow.id,
+        fund: newRow.fund || '',
+        commitment: parseFloat(newRow.commitment) || 0,
+        funded: parseFloat(newRow.funded) || 0,
+        called: parseFloat(newRow.called) || 0,
+        nav: parseFloat(newRow.nav) || 0,
+        stage: newRow.stage || 'outreach',
+      };
+      const updatedLPs = lps.map(lp => {
+        if (lp.id === selectedLPId) {
+          return { ...lp, commitments: [...(lp.commitments || []), newCommitment] };
+        }
+        return lp;
+      });
+      saveLPs(updatedLPs);
 
       onSave();
       onClose();
     } catch (error) {
-      console.error('Error adding LP to fund:', error);
-      alert('Error adding LP: ' + error.message);
+      console.error('Error adding LP commitment:', error);
+      alert('Error adding LP commitment: ' + error.message);
     }
   };
 
-  const selectedLP = allLPs.find(lp => lp.id === selectedLPId);
+  const selectedLP = availableLPs.find(lp => lp.id === selectedLPId);
 
   return (
     <div className="overlay" onClick={onClose}>
       <div className="drawer" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
         <div className="drawer-header">
-          <div className="drawer-title">Add LP to {fundName.replace('Decisive Point ', '')}</div>
+          <div className="drawer-title">Add LP Commitment to {fundName.replace('Decisive Point ', '')}</div>
           <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
         </div>
         <div className="drawer-body">
-          {loading ? (
-            <div style={{ padding: 20, textAlign: 'center', color: 'var(--ink-muted)' }}>
-              Loading LPs...
-            </div>
-          ) : allLPs.length === 0 ? (
+          {availableLPs.length === 0 ? (
             <div className="empty" style={{ padding: '30px 20px' }}>
               <p>No LPs available to add</p>
               <p style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 8 }}>
-                Add LPs to your directory first
+                All LPs already have a commitment to this fund, or add LPs to your directory first
               </p>
             </div>
           ) : (
             <div className="form-grid">
               <div className="field span2">
                 <label>Select LP *</label>
-                <select 
-                  value={selectedLPId} 
+                <select
+                  value={selectedLPId}
                   onChange={e => setSelectedLPId(e.target.value)}
                   style={{ fontSize: 14 }}
                 >
                   <option value="">Choose from LP Directory...</option>
-                  {allLPs.map(lp => (
+                  {availableLPs.map(lp => (
                     <option key={lp.id} value={lp.id}>
-                      {lp.firm} - {lp.name}
+                      {lp.firm ? `${lp.firm} - ${lp.name}` : lp.name}
                     </option>
                   ))}
                 </select>
@@ -5120,13 +5125,33 @@ function AddLPToFundModal({ fundName, contacts, onClose, onSave }) {
                   placeholder="5000000"
                 />
               </div>
+
+              <div className="field">
+                <label>Funded ($)</label>
+                <input
+                  type="number"
+                  value={form.funded}
+                  onChange={e => setForm({ ...form, funded: parseFloat(e.target.value) || 0 })}
+                  placeholder="0"
+                />
+              </div>
+
+              <div className="field">
+                <label>Called ($)</label>
+                <input
+                  type="number"
+                  value={form.called}
+                  onChange={e => setForm({ ...form, called: parseFloat(e.target.value) || 0 })}
+                  placeholder="0"
+                />
+              </div>
             </div>
           )}
         </div>
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={!selectedLPId}>
-            Add to Fund
+            Add LP Commitment
           </button>
         </div>
       </div>
