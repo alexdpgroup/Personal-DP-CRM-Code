@@ -4063,7 +4063,8 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
   });
 
   const funds = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
-  const fundDisplay = funds.length === 1 ? funds[0] : funds.length > 1 ? funds.join(", ") : lp.fund || "—";
+  const fundDisplayText = funds.length === 0 ? (lp.fund || "—") : funds.length === 1 ? funds[0] : funds.join(", ");
+  const fundDisplayStacked = funds.length <= 1 ? fundDisplayText : funds.map((f, i) => <div key={i}>{f}</div>);
   const fundPortfolio = PORTFOLIO.filter(p => funds.includes(p.fund));
 
   return (
@@ -4084,7 +4085,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
       <div className="portal-content fade-in">
         <div className="portal-welcome">
           <h2>Welcome back, {lp.name.split(" ")[0]}</h2>
-          <p>Your investor summary as of {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · {fundDisplay}</p>
+          <p>Your investor summary as of {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · {fundDisplayText}</p>
         </div>
 
         {/* Big summary */}
@@ -4123,7 +4124,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
           {/* Account Details */}
           <div className="portal-card">
             <h3>Account Details</h3>
-            <div className="portal-row"><span className="lbl">Fund</span><span className="val">{fundDisplay}</span></div>
+            <div className="portal-row" style={{ alignItems: 'flex-start' }}><span className="lbl">Fund</span><span className="val" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>{fundDisplayStacked}</span></div>
             <div className="portal-row"><span className="lbl">Investor Type</span><span className="val">{lp.tier || "—"}</span></div>
             <div className="portal-row"><span className="lbl">Relationship Manager</span><span className="val">{lp.partner}</span></div>
             <div className="portal-row"><span className="lbl">Commitment</span><span className="val">{fmtMoney(totalCommitment)}</span></div>
@@ -4164,7 +4165,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
         {/* Portfolio Companies */}
         {fundPortfolio.length > 0 && (
           <div className="portal-card mt-4">
-            <h3>Fund Portfolio — {fundDisplay}</h3>
+            <h3>Fund Portfolio — {fundDisplayText}</h3>
             <table>
               <thead>
                 <tr>
