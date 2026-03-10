@@ -4702,6 +4702,49 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
             saveOneLP(updated);
             setSelectedLP(updated);
           }}
+          onUpdateCommitment={async (commitIdx, updated) => {
+            const lp = selectedLP;
+            const existingCommitment = (lp.commitments || [])[commitIdx];
+            if (!existingCommitment) return;
+
+            const isLegacy = String(existingCommitment.id).startsWith('legacy-');
+            const mergedDb = {
+              fund: updated.fund !== undefined ? updated.fund : existingCommitment.fund,
+              commitment: updated.commitment !== undefined ? updated.commitment : existingCommitment.commitment,
+              funded: updated.funded !== undefined ? updated.funded : existingCommitment.funded,
+              called: updated.called !== undefined ? updated.called : existingCommitment.called,
+              nav: updated.nav !== undefined ? updated.nav : existingCommitment.nav,
+              stage: updated.stage !== undefined ? updated.stage : existingCommitment.stage || 'outreach',
+            };
+
+            try {
+              let newId = existingCommitment.id;
+              if (isLegacy) {
+                const { data: newRow, error } = await supabase
+                  .from('lp_commitments')
+                  .insert({ lp_id: lp.id, ...mergedDb })
+                  .select()
+                  .single();
+                if (error) throw error;
+                newId = newRow.id;
+              } else {
+                const { error } = await supabase
+                  .from('lp_commitments')
+                  .update(mergedDb)
+                  .eq('id', existingCommitment.id);
+                if (error) throw error;
+              }
+
+              const newCommitments = [...(lp.commitments || [])];
+              newCommitments[commitIdx] = { ...mergedDb, id: newId };
+              const updatedLP = { ...lp, commitments: newCommitments };
+              saveOneLP(updatedLP);
+              setSelectedLP(updatedLP);
+            } catch (error) {
+              console.error('Error updating commitment:', error);
+              alert('Error updating commitment: ' + error.message);
+            }
+          }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelectedLP(null); }}
           onPortal={() => { onPortal(selectedLP); setSelectedLP(null); }}
         />
