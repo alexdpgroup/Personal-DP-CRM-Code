@@ -3943,8 +3943,11 @@ Send them the portal URL and their credentials. They'll only see their own inves
 // ═══════════════════════════════════════════════════════════════════════════════
 function PortalPickerPage({ lps, fundMOICs, onSelect }) {
   const [sortBy, setSortBy] = useState("firm"); // "firm" | "commitment"
+  const [search, setSearch] = useState("");
   const moics = fundMOICs || {};
+  const q = search.toLowerCase();
   const eligible = lps.filter(l => {
+    if (q && !(l.name?.toLowerCase().includes(q) || l.firm?.toLowerCase().includes(q))) return false;
     const closedCommitments = (l.commitments || []).filter(c => c.stage === 'closed');
     const totalCommit = closedCommitments.reduce((s, c) => s + (c.commitment || 0), 0);
     return closedCommitments.length > 0 && totalCommit > 0;
@@ -3965,10 +3968,16 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
       <div className="card">
         <div className="card-header">
           <span className="card-title">Closed LPs — Portal Preview</span>
-          <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="firm">Sort: Firm A–Z</option>
-            <option value="commitment">Sort: Commitment ↓</option>
-          </select>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div className="search-wrap">
+              <Icon name="search" size={14} />
+              <input className="search-input" placeholder="Search LP name or firm…" value={search} onChange={e => setSearch(e.target.value)} />
+            </div>
+            <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="firm">Sort: Firm A–Z</option>
+              <option value="commitment">Sort: Commitment ↓</option>
+            </select>
+          </div>
         </div>
         <div className="card-body">
           <table>
@@ -3997,7 +4006,7 @@ function PortalPickerPage({ lps, fundMOICs, onSelect }) {
                 </tr>
                 );
               })}
-              {eligible.length === 0 && <tr><td colSpan={5}><div className="empty">No closed LPs yet.</div></td></tr>}
+              {eligible.length === 0 && <tr><td colSpan={5}><div className="empty">{q ? "No LPs match your search." : "No closed LPs yet."}</div></td></tr>}
             </tbody>
           </table>
         </div>
