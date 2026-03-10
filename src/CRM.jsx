@@ -1768,7 +1768,7 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateComm
                                 title="Delete commitment"
                                 onClick={() => onDeleteCommitment(i)}
                                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
-                              >—</button>
+                              >×</button>
                             )}
                           </div>
                         </div>
