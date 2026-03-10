@@ -4085,7 +4085,7 @@ function InvestorPortal({ lp, fundMOICs, onExit }) {
       <div className="portal-content fade-in">
         <div className="portal-welcome">
           <h2>Welcome back, {lp.name.split(" ")[0]}</h2>
-          <p>Your investor summary as of {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })} · {fundDisplayText}</p>
+          <p>Your investor summary as of {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
         </div>
 
         {/* Big summary */}
