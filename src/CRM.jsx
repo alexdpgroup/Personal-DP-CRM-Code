@@ -1495,6 +1495,10 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
             const realIdx = lps.findIndex(l => l.id === selected.id);
             if (realIdx !== -1) updateCommitment(realIdx, commitIdx, updated);
           }}
+          onDeleteCommitment={(commitIdx) => {
+            const realIdx = lps.findIndex(l => l.id === selected.id);
+            if (realIdx !== -1) deleteCommitment(realIdx, commitIdx);
+          }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelected(null); }}
           onPortal={() => { onPortal(selected); setSelected(null); }}
         />
@@ -1613,7 +1617,7 @@ function EditCommitmentDrawer({ lpName, commitment, fundNames, onClose, onSave }
   );
 }
 
-function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateCommitment, onDelete, onPortal }) {
+function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateCommitment, onDeleteCommitment, onDelete, onPortal }) {
   const [tab, setTab] = useState("overview");
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...lp, name: lp.name || '', firm: lp.firm || '', email: lp.email || '', phone: lp.phone || '', partner: lp.partner || '', tier: lp.tier || '' });
@@ -1753,12 +1757,19 @@ function LPDetailDrawer({ lp, fundMOICs, partners, onClose, onSave, onUpdateComm
                           <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
                             {c.fund ? c.fund.replace("Decisive Point ", "") : "No fund"}
                           </span>
-                          <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+                          <div style={{ display: 'flex', gap: 16, fontSize: 12, alignItems: 'center' }}>
                             <span title="Commitment">{c.commitment ? fmtMoney(c.commitment) : "—"}</span>
                             <span title="Funded" style={{ color: 'var(--gold-dark)' }}>{c.funded ? fmtMoney(c.funded) : "—"}</span>
                             {(() => { const cNAV = (c.stage === 'closed') ? calcCommitmentNAV(c.commitment, c.fund, moics) : 0; return (
                             <span title="NAV" style={{ color: cNAV > (c.funded || 0) ? 'var(--green)' : 'var(--red)' }}>{cNAV ? fmtMoney(cNAV) : "—"}</span>
                             ); })()}
+                            {onDeleteCommitment && (
+                              <button
+                                title="Delete commitment"
+                                onClick={() => onDeleteCommitment(i)}
+                                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
+                              >—</button>
+                            )}
                           </div>
                         </div>
                         <div className="pipeline-bar" style={{ gap: 4 }}>
@@ -4743,6 +4754,30 @@ function FundPage({ fundName, fundDefs, setFundDefs, fundMOICs, partners, lps, s
             } catch (error) {
               console.error('Error updating commitment:', error);
               alert('Error updating commitment: ' + error.message);
+            }
+          }}
+          onDeleteCommitment={async (commitIdx) => {
+            const lp = selectedLP;
+            const commitmentToDelete = (lp.commitments || [])[commitIdx];
+            if (!commitmentToDelete) return;
+            if (!confirm('Delete this commitment?')) return;
+
+            const isLegacy = String(commitmentToDelete.id).startsWith('legacy-');
+            try {
+              if (!isLegacy) {
+                const { error } = await supabase
+                  .from('lp_commitments')
+                  .delete()
+                  .eq('id', commitmentToDelete.id);
+                if (error) throw error;
+              }
+              const newCommitments = (lp.commitments || []).filter((_, i) => i !== commitIdx);
+              const updatedLP = { ...lp, commitments: newCommitments };
+              saveOneLP(updatedLP);
+              setSelectedLP(updatedLP);
+            } catch (error) {
+              console.error('Error deleting commitment:', error);
+              alert('Error deleting commitment: ' + error.message);
             }
           }}
           onDelete={(id) => { saveLPs(lps.filter(l => l.id !== id)); setSelectedLP(null); }}
