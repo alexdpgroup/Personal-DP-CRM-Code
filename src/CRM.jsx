@@ -5004,6 +5004,7 @@ function FundPortfolioTab({ portfolio, fundName }) {
 // ── Add LP to Fund Modal ──
 function AddLPToFundModal({ fundName, lps, saveLPs, onClose, onSave }) {
   const [selectedLPId, setSelectedLPId] = useState('');
+  const [lpSearch, setLpSearch] = useState('');
   const [form, setForm] = useState({
     stage: 'outreach',
     commitment: 0,
@@ -5015,6 +5016,13 @@ function AddLPToFundModal({ fundName, lps, saveLPs, onClose, onSave }) {
   const availableLPs = (lps || []).filter(lp => {
     const alreadyHasCommitment = lp.commitments?.some(c => c.fund === fundName);
     return !alreadyHasCommitment;
+  });
+
+  // Further filter by search query
+  const filteredLPs = availableLPs.filter(lp => {
+    if (!lpSearch) return true;
+    const q = lpSearch.toLowerCase();
+    return lp.name?.toLowerCase().includes(q) || lp.firm?.toLowerCase().includes(q);
   });
 
   const handleSave = async () => {
@@ -5088,22 +5096,54 @@ function AddLPToFundModal({ fundName, lps, saveLPs, onClose, onSave }) {
             <div className="form-grid">
               <div className="field span2">
                 <label>Select LP *</label>
-                <select
-                  value={selectedLPId}
-                  onChange={e => setSelectedLPId(e.target.value)}
-                  style={{ fontSize: 14 }}
-                >
-                  <option value="">Choose from LP Directory...</option>
-                  {availableLPs.map(lp => (
-                    <option key={lp.id} value={lp.id}>
-                      {lp.firm ? `${lp.firm} - ${lp.name}` : lp.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedLP && (
-                  <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 6 }}>
-                    {selectedLP.email} {selectedLP.phone && `· ${selectedLP.phone}`}
+                {selectedLP ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedLP.firm ? `${selectedLP.firm} - ${selectedLP.name}` : selectedLP.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 2 }}>
+                        {selectedLP.email}{selectedLP.phone && ` · ${selectedLP.phone}`}
+                      </div>
+                    </div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedLPId(''); setLpSearch(''); }}>
+                      <Icon name="close" size={14} />
+                    </button>
                   </div>
+                ) : (
+                  <>
+                    <div className="search-wrap">
+                      <Icon name="search" size={14} />
+                      <input
+                        className="search-input"
+                        placeholder="Search LP name or firm…"
+                        value={lpSearch}
+                        onChange={e => setLpSearch(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8, marginTop: 6 }}>
+                      {filteredLPs.length === 0 ? (
+                        <div style={{ padding: '16px', textAlign: 'center', color: 'var(--ink-muted)', fontSize: 13 }}>
+                          {lpSearch ? 'No matching LPs found' : 'No LPs available'}
+                        </div>
+                      ) : filteredLPs.map(lp => (
+                        <div
+                          key={lp.id}
+                          onClick={() => { setSelectedLPId(lp.id); setLpSearch(''); }}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid var(--border)',
+                            transition: 'background 0.15s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-hover)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div style={{ fontWeight: 600, fontSize: 13 }}>{lp.firm ? `${lp.firm} - ${lp.name}` : lp.name}</div>
+                          {lp.email && <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 1 }}>{lp.email}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
 
