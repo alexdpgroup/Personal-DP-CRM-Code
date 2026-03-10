@@ -150,7 +150,7 @@ const CSS = `
   .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
   .search-wrap { position: relative; flex: 1; min-width: 200px; max-width: 320px; }
   .search-wrap svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-muted); }
-  .search-input {
+  .search-input, .field .search-input {
     width: 100%; padding: 8px 12px 8px 34px;
     border: 1px solid var(--border); border-radius: 7px;
     font-size: 13.5px; font-family: var(--sans); background: var(--card);
