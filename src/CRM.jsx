@@ -1137,6 +1137,7 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
   const [assignLPFor, setAssignLPFor] = useState(null); // manager id
   const [mgrSearch, setMgrSearch] = useState("");
   const [mgrExpanded, setMgrExpanded] = useState({});
+  const [editManagerFor, setEditManagerFor] = useState(null); // manager object
 
   const fundNames = (fundDefs || []).map(f => f.name);
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -1392,6 +1393,20 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
     } catch (err) {
       console.error('Error removing LP from manager:', err);
       alert('Error removing LP: ' + err.message);
+    }
+  };
+
+  const updateManager = async (updated) => {
+    try {
+      const { error } = await supabase
+        .from('managers')
+        .update({ name: updated.name, firm: updated.firm, email: updated.email, phone: updated.phone })
+        .eq('id', updated.id);
+      if (error) throw error;
+      setManagers(prev => prev.map(m => m.id === updated.id ? { ...m, ...updated } : m));
+    } catch (err) {
+      console.error('Error updating manager:', err);
+      alert('Error updating manager: ' + err.message);
     }
   };
 
@@ -1684,6 +1699,9 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                           <td style={{ textAlign: "right", fontWeight: 600, color: mn > mf ? "var(--green)" : undefined }}>{mn ? fmtMoney(mn) : "—"}</td>
                           <td onClick={e => e.stopPropagation()}>
                             <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setEditManagerFor(mgr)} title="Edit manager">
+                                <Icon name="edit" size={12} />
+                              </button>
                               <button className="btn btn-ghost btn-sm" onClick={() => setAssignLPFor(mgr.id)} title="Add LP to manager">
                                 <Icon name="plus" size={12} />
                               </button>
@@ -1759,6 +1777,15 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
               existingLPIds={(managers.find(m => m.id === assignLPFor) || {}).lp_ids || []}
               onClose={() => setAssignLPFor(null)}
               onAssign={(lpId) => { assignLPToManager(assignLPFor, lpId); setAssignLPFor(null); }}
+            />
+          )}
+
+          {/* Edit Manager Drawer */}
+          {editManagerFor && (
+            <EditManagerDrawer
+              manager={editManagerFor}
+              onClose={() => setEditManagerFor(null)}
+              onSave={(updated) => { updateManager(updated); setEditManagerFor(null); }}
             />
           )}
         </>
@@ -1840,6 +1867,43 @@ function AddManagerDrawer({ onClose, onSave }) {
         <div className="drawer-footer">
           <button className="btn btn-outline" onClick={onClose}>Cancel</button>
           <button className="btn" style={{ background: '#7f4dda', color: '#fff' }} onClick={save}>Add Manager</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Edit Manager Drawer ──
+function EditManagerDrawer({ manager, onClose, onSave }) {
+  const [form, setForm] = useState({ name: manager.name || '', firm: manager.firm || '', email: manager.email || '', phone: manager.phone || '' });
+  const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const save = () => {
+    if (!form.name.trim() || !form.firm.trim()) {
+      alert('Please enter Manager Name and Firm');
+      return;
+    }
+    onSave({ ...manager, ...form });
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Edit Manager</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2"><label>Firm / Company *</label><input value={form.firm} onChange={f("firm")} placeholder="Blackstone" /></div>
+            <div className="field span2"><label>Manager Name *</label><input value={form.name} onChange={f("name")} placeholder="John Smith" /></div>
+            <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="john@blackstone.com" /></div>
+            <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{ background: '#7f4dda', color: '#fff' }} onClick={save}>Save Changes</button>
         </div>
       </div>
     </div>
