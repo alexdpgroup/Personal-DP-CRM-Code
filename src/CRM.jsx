@@ -1138,6 +1138,9 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
   const [mgrSearch, setMgrSearch] = useState("");
   const [mgrExpanded, setMgrExpanded] = useState({});
   const [editManagerFor, setEditManagerFor] = useState(null); // manager object
+  const [mgrSortBy, setMgrSortBy] = useState("firm");
+  const [mgrFilterFund, setMgrFilterFund] = useState("all");
+  const [mgrFilterPartner, setMgrFilterPartner] = useState("all");
 
   const fundNames = (fundDefs || []).map(f => f.name);
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -1316,8 +1319,19 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
 
   const filteredManagers = mgrLPs.filter(m => {
     const q = mgrSearch.toLowerCase();
-    return !q || m.name?.toLowerCase().includes(q) || m.firm?.toLowerCase().includes(q);
-  }).sort((a, b) => (a.firm || '').localeCompare(b.firm || ''));
+    const matchQ = !q || m.name?.toLowerCase().includes(q) || m.firm?.toLowerCase().includes(q);
+    const linkedLPs = (m.lp_ids || []).map(id => normalizedLPs.find(l => l.id === id)).filter(Boolean);
+    const matchFund = mgrFilterFund === "all" || linkedLPs.some(lp => (lp.commitments || []).some(c => c.fund === mgrFilterFund));
+    const matchPartner = mgrFilterPartner === "all" || linkedLPs.some(lp => lp.partner === mgrFilterPartner);
+    return matchQ && matchFund && matchPartner;
+  }).sort((a, b) => {
+    if (mgrSortBy === "commitment") {
+      const aTotal = (a.lp_ids || []).map(id => normalizedLPs.find(l => l.id === id)).filter(Boolean).flatMap(lp => lp.commitments || []).reduce((s, c) => s + (c.commitment || 0), 0);
+      const bTotal = (b.lp_ids || []).map(id => normalizedLPs.find(l => l.id === id)).filter(Boolean).flatMap(lp => lp.commitments || []).reduce((s, c) => s + (c.commitment || 0), 0);
+      return bTotal - aTotal;
+    }
+    return (a.firm || '').localeCompare(b.firm || '');
+  });
 
   // Get aggregated commitment data for a manager from their linked LPs
   const getManagerLPData = (manager) => {
@@ -1614,6 +1628,18 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
               <Icon name="search" size={14} />
               <input className="search-input" placeholder="Search manager name or firm…" value={mgrSearch} onChange={e => setMgrSearch(e.target.value)} />
             </div>
+            <select className="filter-select" value={mgrFilterFund} onChange={e => setMgrFilterFund(e.target.value)}>
+              <option value="all">All Funds</option>
+              {allFunds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
+            </select>
+            <select className="filter-select" value={mgrFilterPartner} onChange={e => setMgrFilterPartner(e.target.value)}>
+              <option value="all">All Partners</option>
+              {(partners || PARTNERS).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select className="filter-select" value={mgrSortBy} onChange={e => setMgrSortBy(e.target.value)}>
+              <option value="firm">Sort: Firm A–Z</option>
+              <option value="commitment">Sort: Commitment ↓</option>
+            </select>
             <button className="btn btn-primary" onClick={() => setShowAddManager(true)}>
               <Icon name="plus" size={14} /> Add Manager
             </button>
