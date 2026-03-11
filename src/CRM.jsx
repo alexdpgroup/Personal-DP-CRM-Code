@@ -1643,7 +1643,7 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                       <th style={{ width: 220 }}>Manager</th>
                       <th>LPs</th>
                       <th>Fund</th>
-                      <th>Stage</th>
+                      <th>Tier</th>
                       <th>Partner</th>
                       <th style={{ textAlign: "right" }}>Commitment</th>
                       <th style={{ textAlign: "right" }}>Funded</th>
@@ -1732,9 +1732,9 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                                   </div>
                                 </div>
                               </td>
-                              <td><span style={{ fontSize: 13 }}>{lp.tier || "—"}</span></td>
+                              <td></td>
                               <td><span className="tag" style={{ fontSize: 11 }}>{fundDisp}</span></td>
-                              <td>{(() => { const ds = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || 'outreach'); const si = stageInfo(ds); return <span className="stat-badge" style={{ background: si.bg, color: si.color, fontSize: 11 }}>{si.label}</span>; })()}</td>
+                              <td><span style={{ fontSize: 13 }}>{lp.tier || "—"}</span></td>
                               <td>{lp.partner ? <span className="stat-badge badge-blue">{lp.partner}</span> : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
