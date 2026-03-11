@@ -1723,9 +1723,14 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                               <td style={{ textAlign: "right", fontSize: 12 }}>{lpCalled ? fmtMoney(lpCalled) : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
                               <td>
-                                <button className="btn btn-ghost btn-sm" onClick={() => removeLPFromManager(mgr.id, lp.id)} title="Remove LP from manager" style={{ color: 'var(--red)' }}>
-                                  <Icon name="close" size={11} />
-                                </button>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => setSelected(lp)} title="View details">
+                                    <Icon name="edit" size={12} />
+                                  </button>
+                                  <button className="btn btn-ghost btn-sm" onClick={() => removeLPFromManager(mgr.id, lp.id)} title="Remove LP from manager" style={{ color: 'var(--red)' }}>
+                                    <Icon name="close" size={11} />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           );
