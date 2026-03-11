@@ -1319,7 +1319,8 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
 
   const filteredManagers = mgrLPs.filter(m => {
     const q = mgrSearch.toLowerCase();
-    const matchQ = !q || m.name?.toLowerCase().includes(q) || m.firm?.toLowerCase().includes(q);
+    const linkedLPsForSearch = (m.lp_ids || []).map(id => normalizedLPs.find(l => l.id === id)).filter(Boolean);
+    const matchQ = !q || m.name?.toLowerCase().includes(q) || m.firm?.toLowerCase().includes(q) || linkedLPsForSearch.some(lp => lp.name?.toLowerCase().includes(q) || lp.firm?.toLowerCase().includes(q));
     const linkedLPs = (m.lp_ids || []).map(id => normalizedLPs.find(l => l.id === id)).filter(Boolean);
     const matchFund = mgrFilterFund === "all" || linkedLPs.some(lp => (lp.commitments || []).some(c => c.fund === mgrFilterFund));
     const matchPartner = mgrFilterPartner === "all" || linkedLPs.some(lp => lp.partner === mgrFilterPartner);
@@ -1626,7 +1627,7 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
           <div className="toolbar">
             <div className="search-wrap">
               <Icon name="search" size={14} />
-              <input className="search-input" placeholder="Search manager name or firm…" value={mgrSearch} onChange={e => setMgrSearch(e.target.value)} />
+              <input className="search-input" placeholder="Search manager, firm, or LP name…" value={mgrSearch} onChange={e => setMgrSearch(e.target.value)} />
             </div>
             <select className="filter-select" value={mgrFilterFund} onChange={e => setMgrFilterFund(e.target.value)}>
               <option value="all">All Funds</option>
