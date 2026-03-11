@@ -509,6 +509,7 @@ export default function CRM({ session, onLogout }) {
   const [showAddFund, setShowAddFund] = useState(null); // null, "fund", or "spv"
   const [editingFund, setEditingFund] = useState(null); // fund object being edited
   const [sidebarMenu, setSidebarMenu] = useState(null); // fund name for open context menu
+  const [managers, setManagers] = useState([]);
   
   useEffect(() => {
     loadFromSupabase();
@@ -647,9 +648,27 @@ export default function CRM({ session, onLogout }) {
         console.warn('Could not load partners, using defaults:', err);
       }
 
+      // Load managers and manager-LP links
+      let managersWithLPs = [];
+      try {
+        const [mgrRes, mgrLpRes] = await Promise.all([
+          supabase.from('managers').select('*').order('firm'),
+          supabase.from('manager_lps').select('*'),
+        ]);
+        const mgrs = mgrRes.data || [];
+        const mgrLinks = mgrLpRes.data || [];
+        managersWithLPs = mgrs.map(m => ({
+          ...m,
+          lp_ids: mgrLinks.filter(l => l.manager_id === m.id).map(l => l.lp_id),
+        }));
+      } catch (err) {
+        console.warn('Could not load managers:', err);
+      }
+
       setPartners(partnerNames);
       setFundDefs(transformedFunds.length > 0 ? transformedFunds : FUND_DEFS);
       setLPs(lpsWithCommitments);
+      setManagers(managersWithLPs);
       setLoading(false);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -950,7 +969,7 @@ export default function CRM({ session, onLogout }) {
 
           <div className="content fade-in" key={page + activeFund}>
             {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
-            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} />}
+            {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} managers={managers} setManagers={setManagers} />}
             {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
             {page === "portal" && <PortalPickerPage lps={lps} fundMOICs={fundMOICs} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
@@ -1103,7 +1122,7 @@ function MiniStat({ label, value }) {
 // ── LP DIRECTORY ──────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── LP Directory – Portfolio-style expandable table ──
-function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, partners }) {
+function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, partners, managers, setManagers }) {
   const [search, setSearch] = useState("");
   const [filterPartner, setFilterPartner] = useState("all");
   const [filterFund, setFilterFund] = useState("all");
@@ -1113,6 +1132,11 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
   const [sortBy, setSortBy] = useState("firm"); // "firm" | "commitment"
   const [addCommitmentFor, setAddCommitmentFor] = useState(null); // lp index
   const [editCommitment, setEditCommitment] = useState(null); // { lpIdx, commitIdx }
+  const [managerMode, setManagerMode] = useState(false);
+  const [showAddManager, setShowAddManager] = useState(false);
+  const [assignLPFor, setAssignLPFor] = useState(null); // manager id
+  const [mgrSearch, setMgrSearch] = useState("");
+  const [mgrExpanded, setMgrExpanded] = useState({});
 
   const fundNames = (fundDefs || []).map(f => f.name);
   const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
@@ -1285,184 +1309,457 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
     setLPs(lps.filter((_, i) => i !== lpIdx));
   };
 
+  // ── Manager Mode helpers ──
+  const mgrLPs = managers || [];
+  const toggleMgrExpand = (id) => setMgrExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+
+  const filteredManagers = mgrLPs.filter(m => {
+    const q = mgrSearch.toLowerCase();
+    return !q || m.name?.toLowerCase().includes(q) || m.firm?.toLowerCase().includes(q);
+  }).sort((a, b) => (a.firm || '').localeCompare(b.firm || ''));
+
+  // Get aggregated commitment data for a manager from their linked LPs
+  const getManagerLPData = (manager) => {
+    const linkedLPs = (manager.lp_ids || []).map(id => normalizedLPs.find(l => l.id === id)).filter(Boolean);
+    const allCommitments = linkedLPs.flatMap(lp => lp.commitments || []);
+    return {
+      linkedLPs,
+      totalCommitment: allCommitments.reduce((s, c) => s + (c.commitment || 0), 0),
+      totalFunded: allCommitments.reduce((s, c) => s + (c.funded || 0), 0),
+      totalCalled: allCommitments.reduce((s, c) => s + (c.called || 0), 0),
+      totalNAV: allCommitments.filter(c => c.stage === 'closed').reduce((s, c) => s + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0),
+    };
+  };
+
+  // Manager totals for stat cards
+  const mgrTotalCommitment = filteredManagers.reduce((s, m) => s + getManagerLPData(m).totalCommitment, 0);
+  const mgrTotalFunded = filteredManagers.reduce((s, m) => s + getManagerLPData(m).totalFunded, 0);
+  const mgrTotalCalled = filteredManagers.reduce((s, m) => s + getManagerLPData(m).totalCalled, 0);
+  const mgrTotalNAV = filteredManagers.reduce((s, m) => s + getManagerLPData(m).totalNAV, 0);
+  const mgrTotalLPs = filteredManagers.reduce((s, m) => s + (m.lp_ids || []).length, 0);
+
+  const addManager = async (form) => {
+    try {
+      const { data: newMgr, error } = await supabase
+        .from('managers')
+        .insert({ name: form.name, firm: form.firm, email: form.email || '', phone: form.phone || '' })
+        .select()
+        .single();
+      if (error) throw error;
+      setManagers(prev => [...prev, { ...newMgr, lp_ids: [] }]);
+    } catch (err) {
+      console.error('Error adding manager:', err);
+      alert('Error adding manager: ' + err.message);
+    }
+  };
+
+  const deleteManager = async (managerId) => {
+    if (!confirm('Delete this manager?')) return;
+    try {
+      await supabase.from('manager_lps').delete().eq('manager_id', managerId);
+      const { error } = await supabase.from('managers').delete().eq('id', managerId);
+      if (error) throw error;
+      setManagers(prev => prev.filter(m => m.id !== managerId));
+    } catch (err) {
+      console.error('Error deleting manager:', err);
+      alert('Error deleting manager: ' + err.message);
+    }
+  };
+
+  const assignLPToManager = async (managerId, lpId) => {
+    try {
+      const { error } = await supabase
+        .from('manager_lps')
+        .insert({ manager_id: managerId, lp_id: lpId });
+      if (error) throw error;
+      setManagers(prev => prev.map(m => m.id === managerId ? { ...m, lp_ids: [...(m.lp_ids || []), lpId] } : m));
+    } catch (err) {
+      console.error('Error assigning LP:', err);
+      alert('Error assigning LP: ' + err.message);
+    }
+  };
+
+  const removeLPFromManager = async (managerId, lpId) => {
+    if (!confirm('Remove this LP from manager?')) return;
+    try {
+      const { error } = await supabase
+        .from('manager_lps')
+        .delete()
+        .eq('manager_id', managerId)
+        .eq('lp_id', lpId);
+      if (error) throw error;
+      setManagers(prev => prev.map(m => m.id === managerId ? { ...m, lp_ids: (m.lp_ids || []).filter(id => id !== lpId) } : m));
+    } catch (err) {
+      console.error('Error removing LP from manager:', err);
+      alert('Error removing LP: ' + err.message);
+    }
+  };
+
   return (
     <div>
-      {/* Stat cards */}
-      <div className="stats-row">
-        <StatCard label="Total Commitments" value={fmtMoney(totalCommitment, true)} sub={`${filteredLPs.length} LPs`} />
-        <StatCard label="Total Funded" value={fmtMoney(totalFunded, true)} sub="Capital called" gold />
-        <StatCard label="Total NAV" value={fmtMoney(totalNAV, true)} sub="Net asset value" />
-        <StatCard label="Remaining to Call" value={fmtMoney(totalCommitment - totalFunded, true)} sub="Unfunded commitments" />
-        <StatCard label="Unfunded" value={fmtMoney(totalCalled - totalFunded, true)} sub="Unfunded called capital" />
-      </div>
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {/* ── DIRECTORY MODE (standard LP list) ──────────────────────────── */}
+      {/* ════════════════════════════════════════════════════════════════════ */}
+      {!managerMode ? (
+        <>
+          {/* Stat cards */}
+          <div className="stats-row">
+            <StatCard label="Total Commitments" value={fmtMoney(totalCommitment, true)} sub={`${filteredLPs.length} LPs`} />
+            <StatCard label="Total Funded" value={fmtMoney(totalFunded, true)} sub="Capital called" gold />
+            <StatCard label="Total NAV" value={fmtMoney(totalNAV, true)} sub="Net asset value" />
+            <StatCard label="Remaining to Call" value={fmtMoney(totalCommitment - totalFunded, true)} sub="Unfunded commitments" />
+            <StatCard label="Unfunded" value={fmtMoney(totalCalled - totalFunded, true)} sub="Unfunded called capital" />
+          </div>
 
-      <div className="toolbar">
-        <div className="search-wrap">
-          <Icon name="search" size={14} />
-          <input className="search-input" placeholder="Search LP name or firm…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <select className="filter-select" value={filterFund} onChange={e => setFilterFund(e.target.value)}>
-          <option value="all">All Funds</option>
-          {allFunds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
-        </select>
-        <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
-          <option value="all">All Partners</option>
-          {(partners || PARTNERS).map(p => <option key={p} value={p}>{p}</option>)}
-        </select>
-        <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
-          <option value="firm">Sort: Firm A–Z</option>
-          <option value="commitment">Sort: Commitment ↓</option>
-        </select>
-        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-          <Icon name="plus" size={14} /> Add LP
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title">LP Commitments</span>
-        </div>
-
-        <div style={{ overflowX: "auto" }}>
-          {filteredLPs.length === 0 ? (
-            <div className="card-body">
-              <div className="empty">
-                <Icon name="users" size={40} />
-                <h3>No LPs found</h3>
-                <p>Add your first LP to get started</p>
-              </div>
+          <div className="toolbar">
+            <div className="search-wrap">
+              <Icon name="search" size={14} />
+              <input className="search-input" placeholder="Search LP name or firm…" value={search} onChange={e => setSearch(e.target.value)} />
             </div>
-          ) : (
-            <table style={{ minWidth: 900 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: 220 }}>Investor</th>
-                  <th>Tier</th>
-                  <th>Fund</th>
-                  <th>Stage</th>
-                  <th>Partner</th>
-                  <th style={{ textAlign: "right" }}>Commitment</th>
-                  <th style={{ textAlign: "right" }}>Funded</th>
-                  <th style={{ textAlign: "right" }}>Called</th>
-                  <th style={{ textAlign: "right" }}>NAV</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredLPs.map((lp, lpIdx) => {
-                  const commitments = lp.commitments || [];
-                  const derivedStage = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || "outreach");
-                  const s = stageInfo(derivedStage);
-                  const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
-                  const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
-                  const lpCalled = commitments.reduce((ss, c) => ss + (c.called || 0), 0);
-                  const lpNAV = commitments.filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
-                  const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
-                  const fundDisplay = fundsInvested.length === 1
-                    ? fundsInvested[0].replace("Decisive Point ", "")
-                    : fundsInvested.length > 1
-                      ? `${fundsInvested.length} funds`
-                      : "—";
-                  const isOpen = expanded[lp.id];
-                  // Find actual index in original lps array
-                  const realIdx = lps.findIndex(l => l.id === lp.id);
+            <select className="filter-select" value={filterFund} onChange={e => setFilterFund(e.target.value)}>
+              <option value="all">All Funds</option>
+              {allFunds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
+            </select>
+            <select className="filter-select" value={filterPartner} onChange={e => setFilterPartner(e.target.value)}>
+              <option value="all">All Partners</option>
+              {(partners || PARTNERS).map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+            <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="firm">Sort: Firm A–Z</option>
+              <option value="commitment">Sort: Commitment ↓</option>
+            </select>
+            <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
+              <Icon name="plus" size={14} /> Add LP
+            </button>
+            <button className="btn" style={{ background: '#7f4dda', color: '#fff' }} onClick={() => setManagerMode(true)}>
+              Manager Mode
+            </button>
+          </div>
 
-                  return [
-                    /* ── LP summary row (accordion header) ── */
-                    <tr key={lp.id + "_header"}
-                      onClick={() => toggleExpand(lp.id)}
-                      style={{ background: "#faf9f6", cursor: "pointer", borderTop: "2px solid var(--border)" }}>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{
-                            display: "inline-block", width: 16, height: 16, lineHeight: "16px",
-                            textAlign: "center", fontSize: 10, color: "var(--gold-dark)",
-                            transition: "transform 0.2s",
-                            transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
-                          }}>▶</span>
-                          <div className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{initials(lp.name)}</div>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{lp.firm || lp.name}</div>
-                            <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>
-                              {commitments.length} commitment{commitments.length !== 1 ? "s" : ""}
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">LP Commitments</span>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              {filteredLPs.length === 0 ? (
+                <div className="card-body">
+                  <div className="empty">
+                    <Icon name="users" size={40} />
+                    <h3>No LPs found</h3>
+                    <p>Add your first LP to get started</p>
+                  </div>
+                </div>
+              ) : (
+                <table style={{ minWidth: 900 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 220 }}>Investor</th>
+                      <th>Tier</th>
+                      <th>Fund</th>
+                      <th>Stage</th>
+                      <th>Partner</th>
+                      <th style={{ textAlign: "right" }}>Commitment</th>
+                      <th style={{ textAlign: "right" }}>Funded</th>
+                      <th style={{ textAlign: "right" }}>Called</th>
+                      <th style={{ textAlign: "right" }}>NAV</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredLPs.map((lp, lpIdx) => {
+                      const commitments = lp.commitments || [];
+                      const derivedStage = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || "outreach");
+                      const s = stageInfo(derivedStage);
+                      const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
+                      const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
+                      const lpCalled = commitments.reduce((ss, c) => ss + (c.called || 0), 0);
+                      const lpNAV = commitments.filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
+                      const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
+                      const fundDisplay = fundsInvested.length === 1
+                        ? fundsInvested[0].replace("Decisive Point ", "")
+                        : fundsInvested.length > 1
+                          ? `${fundsInvested.length} funds`
+                          : "—";
+                      const isOpen = expanded[lp.id];
+                      // Find actual index in original lps array
+                      const realIdx = lps.findIndex(l => l.id === lp.id);
+
+                      return [
+                        /* ── LP summary row (accordion header) ── */
+                        <tr key={lp.id + "_header"}
+                          onClick={() => toggleExpand(lp.id)}
+                          style={{ background: "#faf9f6", cursor: "pointer", borderTop: "2px solid var(--border)" }}>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{
+                                display: "inline-block", width: 16, height: 16, lineHeight: "16px",
+                                textAlign: "center", fontSize: 10, color: "var(--gold-dark)",
+                                transition: "transform 0.2s",
+                                transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
+                              }}>▶</span>
+                              <div className="avatar" style={{ width: 32, height: 32, fontSize: 12 }}>{initials(lp.name)}</div>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>{lp.firm || lp.name}</div>
+                                <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>
+                                  {commitments.length} commitment{commitments.length !== 1 ? "s" : ""}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ fontSize: 13 }}>{lp.tier || "—"}</span>
-                      </td>
-                      <td>
-                        <span className="tag" style={{ fontSize: 11 }} title={fundsInvested.length > 1 ? fundsInvested.join(', ') : ''}>
-                          {fundDisplay}
-                        </span>
-                      </td>
-                      <td></td>
-                      <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
-                      <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
-                      <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
-                      <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCalled ? fmtMoney(lpCalled) : "—"}</td>
-                      <td style={{ textAlign: "right", fontWeight: 600, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
-                      <td onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <button className="btn btn-ghost btn-sm" onClick={() => setSelected(lp)} title="View details">
-                            <Icon name="edit" size={12} />
-                          </button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => setAddCommitmentFor(realIdx)} title="Add commitment">
-                            <Icon name="plus" size={12} />
-                          </button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => deleteLP(realIdx)} title="Delete LP" style={{ color: 'var(--red)' }}>
-                            <Icon name="close" size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>,
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 13 }}>{lp.tier || "—"}</span>
+                          </td>
+                          <td>
+                            <span className="tag" style={{ fontSize: 11 }} title={fundsInvested.length > 1 ? fundsInvested.join(', ') : ''}>
+                              {fundDisplay}
+                            </span>
+                          </td>
+                          <td></td>
+                          <td><span className="stat-badge badge-blue">{lp.partner}</span></td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{lpCalled ? fmtMoney(lpCalled) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
+                          <td onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(lp)} title="View details">
+                                <Icon name="edit" size={12} />
+                              </button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setAddCommitmentFor(realIdx)} title="Add commitment">
+                                <Icon name="plus" size={12} />
+                              </button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => deleteLP(realIdx)} title="Delete LP" style={{ color: 'var(--red)' }}>
+                                <Icon name="close" size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>,
 
-                    /* ── Commitment rows (expanded) ── */
-                    ...(isOpen ? commitments.map((commit, commitIdx) => {
-                      const cs = stageInfo(commit.stage || "outreach");
-                      return (
-                      <tr key={lp.id + "-commit-" + commitIdx} style={{ background: "#fff" }}>
-                        <td style={{ paddingLeft: 68 }}>
-                          <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
-                            {commit.fund ? commit.fund.replace("Decisive Point ", "") : "No fund"}
-                          </span>
-                        </td>
-                        <td></td>
-                        <td></td>
-                        <td>
-                          <span className="stat-badge" style={{ background: cs.bg, color: cs.color, fontSize: 11 }}>{cs.label}</span>
-                        </td>
-                        <td></td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
-                        <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
-                        <td style={{ textAlign: "right", fontSize: 12 }}>{commit.called ? fmtMoney(commit.called) : "—"}</td>
-                        {(() => { const cNAV = (commit.stage === 'closed') ? calcCommitmentNAV(commit.commitment, commit.fund, fundMOICs) : 0; return (
-                        <td style={{ textAlign: "right", fontSize: 12, color: cNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
-                          {cNAV ? fmtMoney(cNAV) : "—"}
-                        </td>
-                        ); })()}
-                        <td>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button className="btn btn-ghost btn-sm" onClick={() => setEditCommitment({ lpIdx: realIdx, commitIdx })} title="Edit commitment">
-                              <Icon name="edit" size={11} />
-                            </button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => deleteCommitment(realIdx, commitIdx)} title="Delete commitment" style={{ color: 'var(--red)' }}>
-                              <Icon name="close" size={11} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      );
-                    }) : [])
-                  ];
-                })}
-              </tbody>
-            </table>
+                        /* ── Commitment rows (expanded) ── */
+                        ...(isOpen ? commitments.map((commit, commitIdx) => {
+                          const cs = stageInfo(commit.stage || "outreach");
+                          return (
+                          <tr key={lp.id + "-commit-" + commitIdx} style={{ background: "#fff" }}>
+                            <td style={{ paddingLeft: 68 }}>
+                              <span style={{ fontSize: 11, background: "var(--gold-light)", color: "var(--gold-dark)", borderRadius: 4, padding: "2px 7px", fontWeight: 500 }}>
+                                {commit.fund ? commit.fund.replace("Decisive Point ", "") : "No fund"}
+                              </span>
+                            </td>
+                            <td></td>
+                            <td></td>
+                            <td>
+                              <span className="stat-badge" style={{ background: cs.bg, color: cs.color, fontSize: 11 }}>{cs.label}</span>
+                            </td>
+                            <td></td>
+                            <td style={{ textAlign: "right", fontSize: 12 }}>{commit.commitment ? fmtMoney(commit.commitment) : "—"}</td>
+                            <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{commit.funded ? fmtMoney(commit.funded) : "—"}</td>
+                            <td style={{ textAlign: "right", fontSize: 12 }}>{commit.called ? fmtMoney(commit.called) : "—"}</td>
+                            {(() => { const cNAV = (commit.stage === 'closed') ? calcCommitmentNAV(commit.commitment, commit.fund, fundMOICs) : 0; return (
+                            <td style={{ textAlign: "right", fontSize: 12, color: cNAV > (commit.funded || 0) ? "var(--green)" : "var(--red)" }}>
+                              {cNAV ? fmtMoney(cNAV) : "—"}
+                            </td>
+                            ); })()}
+                            <td>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-ghost btn-sm" onClick={() => setEditCommitment({ lpIdx: realIdx, commitIdx })} title="Edit commitment">
+                                  <Icon name="edit" size={11} />
+                                </button>
+                                <button className="btn btn-ghost btn-sm" onClick={() => deleteCommitment(realIdx, commitIdx)} title="Delete commitment" style={{ color: 'var(--red)' }}>
+                                  <Icon name="close" size={11} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          );
+                        }) : [])
+                      ];
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </>
+      ) : (
+        /* ════════════════════════════════════════════════════════════════════ */
+        /* ── MANAGER MODE ──────────────────────────────────────────────── */
+        /* ════════════════════════════════════════════════════════════════════ */
+        <>
+          {/* Manager stat cards */}
+          <div className="stats-row">
+            <StatCard label="Managers" value={filteredManagers.length} sub={`${mgrTotalLPs} LPs managed`} />
+            <StatCard label="Total AUM" value={fmtMoney(mgrTotalCommitment, true)} sub="Managed commitments" gold />
+            <StatCard label="Total Funded" value={fmtMoney(mgrTotalFunded, true)} sub="Capital called" />
+            <StatCard label="Total NAV" value={fmtMoney(mgrTotalNAV, true)} sub="Net asset value" />
+          </div>
+
+          <div className="toolbar">
+            <div className="search-wrap">
+              <Icon name="search" size={14} />
+              <input className="search-input" placeholder="Search manager name or firm…" value={mgrSearch} onChange={e => setMgrSearch(e.target.value)} />
+            </div>
+            <button className="btn btn-primary" onClick={() => setShowAddManager(true)}>
+              <Icon name="plus" size={14} /> Add Manager
+            </button>
+            <button className="btn" style={{ background: '#7f4dda', color: '#fff' }} onClick={() => setManagerMode(false)}>
+              Directory Mode
+            </button>
+          </div>
+
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">Manager Directory</span>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              {filteredManagers.length === 0 ? (
+                <div className="card-body">
+                  <div className="empty">
+                    <Icon name="users" size={40} />
+                    <h3>No managers found</h3>
+                    <p>Add your first manager to get started</p>
+                  </div>
+                </div>
+              ) : (
+                <table style={{ minWidth: 900 }}>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 220 }}>Manager</th>
+                      <th>LPs</th>
+                      <th>Fund</th>
+                      <th>Stage</th>
+                      <th>Partner</th>
+                      <th style={{ textAlign: "right" }}>Commitment</th>
+                      <th style={{ textAlign: "right" }}>Funded</th>
+                      <th style={{ textAlign: "right" }}>Called</th>
+                      <th style={{ textAlign: "right" }}>NAV</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredManagers.map((mgr) => {
+                      const { linkedLPs: mLPs, totalCommitment: mc, totalFunded: mf, totalCalled: mca, totalNAV: mn } = getManagerLPData(mgr);
+                      const allFundsForMgr = [...new Set(mLPs.flatMap(lp => (lp.commitments || []).map(c => c.fund)).filter(Boolean))];
+                      const fundDisplay = allFundsForMgr.length === 1
+                        ? allFundsForMgr[0].replace("Decisive Point ", "")
+                        : allFundsForMgr.length > 1
+                          ? `${allFundsForMgr.length} funds`
+                          : "—";
+                      const isOpen = mgrExpanded[mgr.id];
+
+                      return [
+                        /* ── Manager summary row ── */
+                        <tr key={mgr.id + "_header"}
+                          onClick={() => toggleMgrExpand(mgr.id)}
+                          style={{ background: "#faf9f6", cursor: "pointer", borderTop: "2px solid var(--border)" }}>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              <span style={{
+                                display: "inline-block", width: 16, height: 16, lineHeight: "16px",
+                                textAlign: "center", fontSize: 10, color: "#7f4dda",
+                                transition: "transform 0.2s",
+                                transform: isOpen ? "rotate(90deg)" : "rotate(0deg)"
+                              }}>▶</span>
+                              <div className="avatar" style={{ width: 32, height: 32, fontSize: 12, background: '#ede0fa', color: '#7f4dda' }}>{initials(mgr.name)}</div>
+                              <div>
+                                <div style={{ fontWeight: 600, fontSize: 14 }}>{mgr.firm || mgr.name}</div>
+                                <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>
+                                  {mLPs.length} LP{mLPs.length !== 1 ? "s" : ""}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td><span style={{ fontSize: 13 }}>{mLPs.length}</span></td>
+                          <td>
+                            <span className="tag" style={{ fontSize: 11 }} title={allFundsForMgr.length > 1 ? allFundsForMgr.join(', ') : ''}>
+                              {fundDisplay}
+                            </span>
+                          </td>
+                          <td></td>
+                          <td></td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{mc ? fmtMoney(mc) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{mf ? fmtMoney(mf) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{mca ? fmtMoney(mca) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600, color: mn > mf ? "var(--green)" : undefined }}>{mn ? fmtMoney(mn) : "—"}</td>
+                          <td onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: 4 }}>
+                              <button className="btn btn-ghost btn-sm" onClick={() => setAssignLPFor(mgr.id)} title="Add LP to manager">
+                                <Icon name="plus" size={12} />
+                              </button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => deleteManager(mgr.id)} title="Delete manager" style={{ color: 'var(--red)' }}>
+                                <Icon name="close" size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>,
+
+                        /* ── Linked LP rows (expanded) ── */
+                        ...(isOpen ? mLPs.map((lp) => {
+                          const commitments = lp.commitments || [];
+                          const lpCommitment = commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
+                          const lpFunded = commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
+                          const lpCalled = commitments.reduce((ss, c) => ss + (c.called || 0), 0);
+                          const lpNAV = commitments.filter(c => c.stage === 'closed').reduce((ss, c) => ss + calcCommitmentNAV(c.commitment, c.fund, fundMOICs), 0);
+                          const fundsInvested = [...new Set(commitments.map(c => c.fund).filter(Boolean))];
+                          const fundDisp = fundsInvested.length === 1 ? fundsInvested[0].replace("Decisive Point ", "") : fundsInvested.length > 1 ? `${fundsInvested.length} funds` : "—";
+                          return (
+                            <tr key={mgr.id + "-lp-" + lp.id} style={{ background: "#fff" }}>
+                              <td style={{ paddingLeft: 68 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <div className="avatar" style={{ width: 26, height: 26, fontSize: 10 }}>{initials(lp.name)}</div>
+                                  <div>
+                                    <div style={{ fontWeight: 500, fontSize: 13 }}>{lp.firm || lp.name}</div>
+                                    <div style={{ fontSize: 11, color: "var(--ink-muted)" }}>{commitments.length} commitment{commitments.length !== 1 ? "s" : ""}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td><span style={{ fontSize: 13 }}>{lp.tier || "—"}</span></td>
+                              <td><span className="tag" style={{ fontSize: 11 }}>{fundDisp}</span></td>
+                              <td>{(() => { const ds = commitments.length > 0 ? mostAdvancedStage(commitments) : (lp.stage || 'outreach'); const si = stageInfo(ds); return <span className="stat-badge" style={{ background: si.bg, color: si.color, fontSize: 11 }}>{si.label}</span>; })()}</td>
+                              <td>{lp.partner ? <span className="stat-badge badge-blue">{lp.partner}</span> : "—"}</td>
+                              <td style={{ textAlign: "right", fontSize: 12 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
+                              <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
+                              <td style={{ textAlign: "right", fontSize: 12 }}>{lpCalled ? fmtMoney(lpCalled) : "—"}</td>
+                              <td style={{ textAlign: "right", fontSize: 12, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
+                              <td>
+                                <button className="btn btn-ghost btn-sm" onClick={() => removeLPFromManager(mgr.id, lp.id)} title="Remove LP from manager" style={{ color: 'var(--red)' }}>
+                                  <Icon name="close" size={11} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        }) : [])
+                      ];
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Add Manager Drawer */}
+          {showAddManager && (
+            <AddManagerDrawer
+              onClose={() => setShowAddManager(false)}
+              onSave={(form) => { addManager(form); setShowAddManager(false); }}
+            />
           )}
-        </div>
-      </div>
 
+          {/* Assign LP to Manager Drawer */}
+          {assignLPFor !== null && (
+            <AssignLPToManagerDrawer
+              managerName={(managers.find(m => m.id === assignLPFor) || {}).firm || (managers.find(m => m.id === assignLPFor) || {}).name || ''}
+              lps={normalizedLPs}
+              existingLPIds={(managers.find(m => m.id === assignLPFor) || {}).lp_ids || []}
+              onClose={() => setAssignLPFor(null)}
+              onAssign={(lpId) => { assignLPToManager(assignLPFor, lpId); setAssignLPFor(null); }}
+            />
+          )}
+        </>
+      )}
+
+      {/* ── Shared Drawers (always available) ── */}
       {showAdd && <AddLPDrawer fundDefs={fundDefs} partners={partners} onClose={() => setShowAdd(false)} onSave={(newLP) => { saveLPs([...lps, { ...newLP, commitments: [] }]); setShowAdd(false); }} />}
 
       {addCommitmentFor !== null && (
@@ -1503,6 +1800,112 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
           onPortal={() => { onPortal(selected); setSelected(null); }}
         />
       )}
+    </div>
+  );
+}
+
+// ── Add Manager Drawer ──
+function AddManagerDrawer({ onClose, onSave }) {
+  const [form, setForm] = useState({ name: '', firm: '', email: '', phone: '' });
+  const f = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const save = () => {
+    if (!form.name.trim() || !form.firm.trim()) {
+      alert('Please enter Manager Name and Firm');
+      return;
+    }
+    onSave(form);
+  };
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-title">Add Manager</div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div className="form-grid">
+            <div className="field span2"><label>Firm / Company *</label><input value={form.firm} onChange={f("firm")} placeholder="Blackstone" /></div>
+            <div className="field span2"><label>Manager Name *</label><input value={form.name} onChange={f("name")} placeholder="John Smith" /></div>
+            <div className="field"><label>Email</label><input type="email" value={form.email} onChange={f("email")} placeholder="john@blackstone.com" /></div>
+            <div className="field"><label>Phone</label><input value={form.phone} onChange={f("phone")} placeholder="(555) 123-4567" /></div>
+          </div>
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Cancel</button>
+          <button className="btn" style={{ background: '#7f4dda', color: '#fff' }} onClick={save}>Add Manager</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Assign LP to Manager Drawer ──
+function AssignLPToManagerDrawer({ managerName, lps, existingLPIds, onClose, onAssign }) {
+  const [lpSearch, setLPSearch] = useState('');
+  const availableLPs = (lps || []).filter(lp => !(existingLPIds || []).includes(lp.id));
+  const filtered = availableLPs.filter(lp => {
+    const q = lpSearch.toLowerCase();
+    return !q || lp.name?.toLowerCase().includes(q) || lp.firm?.toLowerCase().includes(q);
+  });
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="drawer" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-title">Add LP to Manager</div>
+            <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 3 }}>{managerName}</div>
+          </div>
+          <button className="btn btn-ghost" onClick={onClose}><Icon name="close" /></button>
+        </div>
+        <div className="drawer-body">
+          <div style={{ marginBottom: 12 }}>
+            <div className="search-wrap" style={{ maxWidth: '100%' }}>
+              <Icon name="search" size={14} />
+              <input className="search-input" placeholder="Search LP name or firm…" value={lpSearch} onChange={e => setLPSearch(e.target.value)} />
+            </div>
+          </div>
+          {filtered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 24, color: 'var(--ink-muted)', fontSize: 13 }}>
+              {availableLPs.length === 0 ? 'All LPs are already assigned to this manager' : 'No matching LPs found'}
+            </div>
+          ) : (
+            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+              {filtered.map(lp => {
+                const totalCommit = (lp.commitments || []).reduce((s, c) => s + (c.commitment || 0), 0);
+                return (
+                  <div key={lp.id}
+                    onClick={() => onAssign(lp.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '10px 12px', borderRadius: 6, cursor: 'pointer', marginBottom: 4,
+                      border: '1px solid var(--border)', background: 'var(--card)',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'var(--card)'}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="avatar" style={{ width: 28, height: 28, fontSize: 10 }}>{initials(lp.name)}</div>
+                      <div>
+                        <div style={{ fontWeight: 500, fontSize: 13 }}>{lp.firm || lp.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--ink-muted)' }}>{lp.name}</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--ink-soft)' }}>
+                      {totalCommit ? fmtMoney(totalCommit) : '—'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <div className="drawer-footer">
+          <button className="btn btn-outline" onClick={onClose}>Close</button>
+        </div>
+      </div>
     </div>
   );
 }
