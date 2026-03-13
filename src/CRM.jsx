@@ -403,6 +403,39 @@ function computeFundRealizedData(portfolioCompanies, fundName) {
   };
 }
 
+// Compute aggregate portfolio totals (totalInvested, blendedMOIC) across all companies
+function computePortfolioTotals(portfolioCompanies) {
+  const totalInvested = portfolioCompanies.reduce((total, comp) => {
+    return total + comp.financings.reduce((s, f) => {
+      if (f.asset === "Warrants" && f.converted === false) return s;
+      return s + f.invested;
+    }, 0);
+  }, 0);
+  const totalValue = portfolioCompanies.reduce((total, comp) => {
+    let syncedFMV = 0;
+    if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
+      syncedFMV = comp.manualFMV;
+    } else if (comp.financings.length > 0) {
+      const sortedByDate = [...comp.financings].sort((a, b) => new Date(b.date) - new Date(a.date));
+      syncedFMV = sortedByDate[0]?.costPerShare || 0;
+    }
+    return total + comp.financings.reduce((s, f) => {
+      const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
+      if (isUnconverted) return s + f.invested;
+      const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
+      if (isUnconvertedWarrant) return s;
+      const shares = f.shares || (f.costPerShare > 0 ? Math.round(f.invested / f.costPerShare) : 0);
+      const fmv = syncedFMV || f.fmvPerShare || f.costPerShare;
+      return s + (shares * fmv);
+    }, 0);
+  }, 0);
+  return {
+    totalInvested,
+    blendedMOIC: totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—",
+    companyCount: portfolioCompanies.length,
+  };
+}
+
 const PORTFOLIO = []; // Removed seed data - will load from funds
 
 function fmtMoney(n, short = false) {
@@ -503,6 +536,7 @@ export default function CRM({ session, onLogout }) {
   const [lps, setLPs] = useState(null);
   const [fundDefs, setFundDefs] = useState(null);
   const [fundMOICs, setFundMOICs] = useState({});
+  const [portfolioTotals, setPortfolioTotals] = useState({ totalInvested: 0, blendedMOIC: "—" });
   const [partners, setPartners] = useState(PARTNERS);
   const [portalLP, setPortalLP] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -605,6 +639,9 @@ export default function CRM({ session, onLogout }) {
         }
       }
       setFundMOICs(navDataMap);
+
+      // Compute aggregate portfolio totals for Dashboard
+      setPortfolioTotals(computePortfolioTotals(portfolioForNAV));
 
       // Attach commitments to their LPs
       const lpsWithCommitments = (lpsData || []).map(lp => {
@@ -968,9 +1005,9 @@ export default function CRM({ session, onLogout }) {
           </header>
 
           <div className="content fade-in" key={page + activeFund}>
-            {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} onFund={goFund} />}
+            {page === "dashboard" && <DashboardPage lps={lps} fundDefs={fundDefs} fundMOICs={fundMOICs} portfolioTotals={portfolioTotals} onFund={goFund} />}
             {page === "lps" && <LPDirectory lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} fundDefs={fundDefs} fundMOICs={fundMOICs} partners={partners} managers={managers} setManagers={setManagers} />}
-            {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} />}
+            {page === "portfolio" && <PortfolioPage fundDefs={fundDefs} onPortfolioChange={setPortfolioTotals} />}
             {page === "portal" && <PortalPickerPage lps={lps} fundMOICs={fundMOICs} onSelect={setPortalLP} />}
             {page === "settings" && <SettingsPage lps={lps} session={session} />}
             {page === "fund" && activeFund && <FundPage fundName={activeFund} fundDefs={fundDefs} setFundDefs={setFundDefs} fundMOICs={fundMOICs} partners={partners} lps={lps} saveLPs={saveLPs} saveOneLP={saveOneLP} onPortal={setPortalLP} />}
@@ -987,7 +1024,7 @@ export default function CRM({ session, onLogout }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── DASHBOARD PAGE ────────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
-function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
+function DashboardPage({ lps, fundDefs, fundMOICs, portfolioTotals, onFund }) {
   const safeLps = lps || [];
   const getLPStage = (l) => l.commitments?.length > 0 ? mostAdvancedStage(l.commitments) : (l.stage || "outreach");
   const closed = safeLps.filter(l => getLPStage(l) === "closed");
@@ -996,21 +1033,16 @@ function DashboardPage({ lps, fundDefs, fundMOICs, onFund }) {
     if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.commitment || 0), 0);
     return s + (l.commitment || 0);
   }, 0);
-  const totalFunded = safeLps.reduce((s, l) => {
-    if (l.commitments && l.commitments.length > 0) return s + l.commitments.reduce((ss, c) => ss + (c.funded || 0), 0);
-    return s + (l.funded || 0);
-  }, 0);
   const totalPortfolioValue = Object.values(fundMOICs || {}).reduce((s, d) => s + (d.portfolioValue || 0), 0);
-  const pipelineCount = safeLps.filter(l => getLPStage(l) !== "closed").length;
   const funds = fundDefs || FUND_DEFS;
 
   return (
     <div>
       <div className="stats-row">
         <StatCard label="Total LP Commitments" value={fmtMoney(totalCommit, true)} sub={`${closed.length} closed LPs`} />
-        <StatCard label="Capital Deployed" value={fmtMoney(totalFunded, true)} sub={`${Math.round((totalFunded / totalCommit) * 100) || 0}% of commitments`} gold />
+        <StatCard label="Total Invested" value={fmtMoney(portfolioTotals.totalInvested, true)} sub={`${portfolioTotals.companyCount || 0} companies`} />
         <StatCard label="Portfolio Value" value={fmtMoney(totalPortfolioValue, true)} sub="Current marks" gold />
-        <StatCard label="Pipeline LPs" value={pipelineCount} sub="Active prospects" />
+        <StatCard label="Blended MOIC" value={`${portfolioTotals.blendedMOIC}x`} sub="Multiple on invested capital" />
       </div>
 
       <div className="card" style={{ marginTop: 20 }}>
@@ -2726,7 +2758,7 @@ function PipelinePage({ lps, saveLPs }) {
 // Seed schedule of investments data — each company has multiple financing rounds
 const SEED_SCHEDULE = []; // Removed seed data
 
-function PortfolioPage({ fundDefs }) {
+function PortfolioPage({ fundDefs, onPortfolioChange }) {
   const [schedule, setSchedule] = useState(null);
   const [expanded, setExpanded] = useState({});
   const [showAddCompany, setShowAddCompany] = useState(false);
@@ -2745,6 +2777,13 @@ function PortfolioPage({ fundDefs }) {
   useEffect(() => {
     loadPortfolioFromSupabase();
   }, []);
+
+  // Notify parent of portfolio totals whenever schedule changes
+  useEffect(() => {
+    if (schedule && onPortfolioChange) {
+      onPortfolioChange(computePortfolioTotals(schedule));
+    }
+  }, [schedule]);
 
   const loadPortfolioFromSupabase = async () => {
     try {
