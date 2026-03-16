@@ -1703,11 +1703,11 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                       <th>LPs</th>
                       <th>Fund</th>
                       <th>Tier</th>
-                      <th>Partner</th>
                       <th style={{ textAlign: "right" }}>Commitment</th>
                       <th style={{ textAlign: "right" }}>Funded</th>
                       <th style={{ textAlign: "right" }}>Called</th>
                       <th style={{ textAlign: "right" }}>NAV</th>
+                      <th style={{ textAlign: "right" }}>Multiple</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1751,11 +1751,11 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                             </span>
                           </td>
                           <td></td>
-                          <td></td>
                           <td style={{ textAlign: "right", fontWeight: 600 }}>{mc ? fmtMoney(mc) : "—"}</td>
                           <td style={{ textAlign: "right", fontWeight: 600, color: "var(--gold-dark)" }}>{mf ? fmtMoney(mf) : "—"}</td>
                           <td style={{ textAlign: "right", fontWeight: 600 }}>{mca ? fmtMoney(mca) : "—"}</td>
                           <td style={{ textAlign: "right", fontWeight: 600, color: mn > mf ? "var(--green)" : undefined }}>{mn ? fmtMoney(mn) : "—"}</td>
+                          <td style={{ textAlign: "right", fontWeight: 600 }}>{mf ? (mn / mf).toFixed(2) + "x" : "—"}</td>
                           <td onClick={e => e.stopPropagation()}>
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button className="btn btn-ghost btn-sm" onClick={() => setEditManagerFor(mgr)} title="Edit manager">
@@ -1794,11 +1794,11 @@ function LPDirectory({ lps, saveLPs, saveOneLP, onPortal, fundDefs, fundMOICs, p
                               <td></td>
                               <td><span className="tag" style={{ fontSize: 11 }}>{fundDisp}</span></td>
                               <td><span style={{ fontSize: 13 }}>{lp.tier || "—"}</span></td>
-                              <td>{lp.partner ? <span className="stat-badge badge-blue">{lp.partner}</span> : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12 }}>{lpCommitment ? fmtMoney(lpCommitment) : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12, color: "var(--gold-dark)" }}>{lpFunded ? fmtMoney(lpFunded) : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12 }}>{lpCalled ? fmtMoney(lpCalled) : "—"}</td>
                               <td style={{ textAlign: "right", fontSize: 12, color: lpNAV > lpFunded ? "var(--green)" : undefined }}>{lpNAV ? fmtMoney(lpNAV) : "—"}</td>
+                              <td style={{ textAlign: "right", fontSize: 12 }}>{lpFunded ? (lpNAV / lpFunded).toFixed(2) + "x" : "—"}</td>
                               <td>
                                 <div style={{ display: 'flex', gap: 4 }}>
                                   <button className="btn btn-ghost btn-sm" onClick={() => setSelected(lp)} title="View details">
