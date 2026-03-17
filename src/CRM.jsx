@@ -2767,6 +2767,7 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
   const [editCompanyIdx, setEditCompanyIdx] = useState(null); // index into schedule for editing company
   const [editFinancing, setEditFinancing] = useState(null); // {compIdx, finIdx} for editing financing
   const [exitDatePrompt, setExitDatePrompt] = useState(null); // { compIdx } for exit date input
+  const [filterFund, setFilterFund] = useState("all"); // Fund/SPV filter
 
   // Get fund names from fundDefs, or fall back to FUNDS constant
   const fundNames = fundDefs?.map(f => f.name) || FUNDS;
@@ -2846,8 +2847,22 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
 
   if (!schedule) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Loading…</div>;
 
+  // Get unique funds across all financings for filter dropdown
+  const allPortfolioFunds = [...new Set(
+    schedule.flatMap(comp => comp.financings.map(f => f.fund).filter(Boolean))
+  )].sort();
+
+  // Apply fund filter: filter companies to those with financings in the selected fund,
+  // and narrow each company's financings to only those from the selected fund
+  const displaySchedule = filterFund === "all" ? schedule : schedule
+    .map(comp => ({
+      ...comp,
+      financings: comp.financings.filter(f => f.fund === filterFund)
+    }))
+    .filter(comp => comp.financings.length > 0);
+
   // Totals across all - using auto-calculated values with manual overrides
-  const totalInvested = schedule.reduce((total, comp) => {
+  const totalInvested = displaySchedule.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => {
       // Unconverted Warrants: no effect on invested
       if (f.asset === "Warrants" && f.converted === false) return s;
@@ -2855,7 +2870,7 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
     }, 0);
   }, 0);
   
-  const totalValue = schedule.reduce((total, comp) => {
+  const totalValue = displaySchedule.reduce((total, comp) => {
     // FMV logic: manual override > most recent by date > last entered
     let syncedFMV = 0;
     if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
@@ -2879,7 +2894,7 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
     }, 0);
   }, 0);
 
-  const totalShares = schedule.reduce((total, comp) => {
+  const totalShares = displaySchedule.reduce((total, comp) => {
     return total + comp.financings.reduce((s, f) => {
       const isUnconverted = (f.asset === "SAFE" || f.asset === "Convertible Note") && f.converted === false;
       const isUnconvertedWarrant = f.asset === "Warrants" && f.converted === false;
@@ -2891,7 +2906,7 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
   const blendedMOIC   = totalInvested > 0 ? (totalValue / totalInvested).toFixed(2) : "—";
 
   // Realized vs Unrealized calculations
-  const realizedTotals = schedule.reduce((total, comp) => {
+  const realizedTotals = displaySchedule.reduce((total, comp) => {
     if (!comp.exited) return total;
     const compInv = comp.financings.reduce((s, f) => {
       if (f.asset === "Warrants" && f.converted === false) return s;
@@ -3205,7 +3220,7 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
   return (
     <div>
       <div className="stats-row">
-        <StatCard label="Total Invested" value={fmtMoney(totalInvested, true)} sub={`${schedule.length} companies`} />
+        <StatCard label="Total Invested" value={fmtMoney(totalInvested, true)} sub={`${displaySchedule.length} companies`} />
         <StatCard label="Portfolio Value" value={fmtMoney(totalValue, true)} sub="Current marks" gold />
         <StatCard label="Blended MOIC" value={`${blendedMOIC}x`} sub="Multiple on invested capital" />
         <StatCard label="DPI" value={`${dpi}x`} sub="Distributions to paid-in" />
@@ -3216,9 +3231,15 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
       <div className="card">
         <div className="card-header">
           <span className="card-title">Schedule of Investments</span>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAddCompany(true)}>
-            <Icon name="plus" size={13} /> Add Company
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <select className="filter-select" value={filterFund} onChange={e => setFilterFund(e.target.value)}>
+              <option value="all">All Funds / SPVs</option>
+              {allPortfolioFunds.map(f => <option key={f} value={f}>{f.replace('Decisive Point ', '')}</option>)}
+            </select>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowAddCompany(true)}>
+              <Icon name="plus" size={13} /> Add Company
+            </button>
+          </div>
         </div>
         
         {/* Auto-calculation explanation */}
@@ -3246,7 +3267,8 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
               </tr>
             </thead>
             <tbody>
-              {schedule.map((comp, compIdx) => {
+              {displaySchedule.map((comp, _displayIdx) => {
+                const compIdx = schedule.indexOf(comp);
                 // FMV logic: manual override > most recent by date > last entered
                 let syncedFMV = 0;
                 if (comp.manualFMV !== undefined && comp.manualFMV !== null) {
@@ -3364,7 +3386,9 @@ function PortfolioPage({ fundDefs, onPortfolioChange }) {
                   </tr>,
 
                   /* ── Financing rows (expanded) ── */
-                  ...(isOpen ? comp.financings.map((fin, finIdx) => {
+                  ...(isOpen ? comp.financings.map((fin, _filteredFinIdx) => {
+                    // Map back to original financing index in schedule for mutations
+                    const finIdx = schedule[compIdx].financings.findIndex(f => f.id === fin.id);
                     // Get latest round for tooltip reference
                     const latestRound = comp.financings[comp.financings.length -1];
                     // Use same FMV logic
